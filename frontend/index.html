@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TrainingHub</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="users.css?v=2">
+</head>
+<body>
+    <main id="login-view" class="login-shell">
+        <section class="login-panel">
+            <p class="eyebrow">TRAININGHUB</p>
+            <h1>Gestisci la formazione con chiarezza.</h1>
+            <p class="muted">Accedi alla piattaforma per lavorare su corsi, partecipanti, iscrizioni e presenze.</p>
+            <form id="login-form" class="stack-form">
+                <label>Username<input id="login-username" required autocomplete="username"></label>
+                <label>Password<input id="login-password" type="password" required autocomplete="current-password"></label>
+                <button class="primary-button" type="submit">Accedi</button>
+                <p id="login-error" class="form-error" role="alert"></p>
+            </form>
+        </section>
+        <aside class="login-aside">
+            <span class="aside-mark">TH</span>
+            <p>Una vista unica per seguire il percorso formativo, dal primo corso alla frequenza.</p>
+        </aside>
+    </main>
+
+    <main id="app-view" class="app-shell hidden">
+        <aside class="sidebar">
+            <div class="brand"><span>TH</span><strong>TrainingHub</strong></div>
+            <p class="sidebar-label">Workspace</p>
+            <nav id="main-nav">
+                <button class="nav-button active" data-section="overview">Panoramica</button>
+                   <button id="users-nav-button" class="nav-button" data-section="users">Utenti</button>
+                <button class="nav-button" data-section="courses">Corsi</button>
+                <button class="nav-button" data-section="participants">Partecipanti</button>
+                <button class="nav-button" data-section="enrollments">Iscrizioni</button>
+                <button class="nav-button" data-section="attendance">Presenze</button>
+            </nav>
+            <button id="logout-button" class="logout-button">Esci</button>
+        </aside>
+
+        <section class="content-area">
+            <header class="topbar">
+                <div><p class="eyebrow">CONTROL CENTER</p><h2 id="page-title">Panoramica</h2></div>
+                <div class="user-chip"><span id="user-initials">A</span><div><strong id="user-name">Admin</strong><small id="user-role">ADMINISTRATOR</small></div></div>
+            </header>
+
+            <section id="overview-section" class="page-section">
+                <div class="welcome-band"><div><p class="eyebrow">TRAINING OPERATIONS</p><h1>Il percorso, sotto controllo.</h1><p class="muted">Monitora i dati principali e passa rapidamente alle operazioni quotidiane.</p></div><div class="welcome-number">01</div></div>
+                <div class="stat-grid"><article class="stat-card"><span>Corsi</span><strong id="stat-courses">0</strong><small>nel catalogo</small></article><article class="stat-card"><span>Partecipanti</span><strong id="stat-participants">0</strong><small>in anagrafica</small></article><article class="stat-card"><span>Iscrizioni</span><strong id="stat-enrollments">0</strong><small>registrate</small></article></div>
+                <div class="section-heading"><div><p class="eyebrow">QUICK VIEW</p><h3>Prossimi corsi</h3></div><button class="text-button" data-section-link="courses">Vedi catalogo</button></div>
+                <div id="overview-courses" class="record-list"></div>
+            </section>
+
+               <section id="users-section" class="page-section hidden">
+                   <div class="section-heading"><div><p class="eyebrow">IDENTITY SERVICE</p><h3>Gestione utenti</h3></div><button id="new-user-toggle" class="primary-button">Nuovo utente</button></div>
+                   <form id="user-form" class="form-card hidden form-grid">
+                       <label>Username<input id="user-username" required></label>
+                       <label>Password<input id="user-password" type="password" minlength="8" required></label>
+                       <label>Nome<input id="user-first-name" required></label>
+                       <label>Cognome<input id="user-last-name" required></label>
+                       <label>E-mail<input id="user-email" type="email" required></label>
+                       <label>Ruolo<select id="user-role-select"><option value="ADMINISTRATOR">Amministratore</option><option value="TUTOR">Tutor</option><option value="TEACHER">Docente</option></select></label>
+                       <div class="form-actions"><button class="primary-button" type="submit">Crea utente</button><button id="cancel-user" class="secondary-button" type="button">Annulla</button></div>
+                       <p id="user-error" class="form-error"></p>
+                   </form>
+                   <div id="user-list" class="record-list"></div>
+               </section>
+
+            <section id="courses-section" class="page-section hidden">
+                <div class="section-heading"><div><p class="eyebrow">COURSE SERVICE</p><h3>Catalogo corsi</h3></div><button id="new-course-toggle" class="primary-button">Nuovo corso</button></div>
+                <form id="course-form" class="form-card hidden form-grid"><label>Codice<input id="course-code" required></label><label>Titolo<input id="course-title" required></label><label>Area formativa<input id="course-area"></label><label>Ore totali<input id="course-hours" type="number" min="0.01" step="0.01" required></label><label>Data inizio<input id="course-start" type="date" required></label><label>Data fine<input id="course-end" type="date" required></label><label>Capienza<input id="course-capacity" type="number" min="1" required></label><label>Modalita<select id="course-mode"><option value="PRESENCE">Presenza</option><option value="DISTANCE">Distanza</option><option value="MIXED">Mista</option></select></label><label>Stato<select id="course-status"><option value="SCHEDULED">Programmato</option><option value="IN_PROGRESS">In svolgimento</option><option value="COMPLETED">Concluso</option><option value="CANCELLED">Annullato</option></select></label><label>Docente<select id="course-instructor"><option value="">Nessun docente assegnato</option></select></label><div class="form-actions"><button class="primary-button" type="submit">Salva corso</button><button id="cancel-course" class="secondary-button" type="button">Annulla</button></div><p id="course-error" class="form-error"></p></form>
+                <div id="course-list" class="record-list"></div>
+            </section>
+
+            <section id="participants-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">PARTICIPANT SERVICE</p><h3>Anagrafica partecipanti</h3></div><button id="new-participant-toggle" class="primary-button">Nuovo partecipante</button></div><form id="participant-form" class="form-card hidden form-grid"><label>Nome<input id="participant-first-name" required></label><label>Cognome<input id="participant-last-name" required></label><label>Codice fiscale<input id="participant-tax-code" required></label><label>Data di nascita<input id="participant-birth-date" type="date" required></label><label>E-mail<input id="participant-email" type="email" required></label><label>Telefono<input id="participant-phone"></label><label>Titolo di studio<input id="participant-education"></label><label>Stato occupazionale<input id="participant-employment"></label><div class="form-actions"><button class="primary-button" type="submit">Salva partecipante</button><button id="cancel-participant" class="secondary-button" type="button">Annulla</button></div><p id="participant-error" class="form-error"></p></form><div id="participant-list" class="record-list"></div></section>
+
+            <section id="enrollments-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">ENROLLMENT SERVICE</p><h3>Nuova iscrizione</h3></div></div><form id="enrollment-form" class="form-card form-grid"><label>Corso<select id="enrollment-course-id" required><option value="">Seleziona un corso</option></select></label><label>Partecipante<select id="enrollment-participant-id" required><option value="">Seleziona un partecipante</option></select></label><div class="form-actions"><button class="primary-button" type="submit">Crea iscrizione</button></div><p id="enrollment-error" class="form-error"></p></form><div class="section-heading compact"><h3>Iscrizioni recenti</h3></div><div id="enrollment-list" class="record-list"></div></section>
+
+            <section id="attendance-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">ATTENDANCE SERVICE</p><h3 id="attendance-heading">Presenze</h3></div></div><form id="attendance-form" class="form-card form-grid"><label>Corso<select id="attendance-course-id" required><option value="">Seleziona un corso</option></select></label><label>Iscrizione<select id="attendance-enrollment-id" required><option value="">Seleziona un'iscrizione</option></select></label><label>Data lezione<input id="attendance-date" type="date" required></label><label>Entrata<input id="attendance-entry" type="time" required></label><label>Uscita<input id="attendance-exit" type="time" required></label><label class="checkbox-label"><input id="attendance-absent" type="checkbox"> Assente</label><label>Giustificazione<input id="attendance-justification"></label><div class="form-actions"><button class="primary-button" type="submit">Registra presenza</button></div><p id="attendance-error" class="form-error"></p></form><div id="attendance-list" class="record-list"></div></section>
+        </section>
+    </main>
+    <div id="toast" class="toast" role="status"></div>
+    <script src="app.js?v=3"></script>
+    <script src="users.js?v=4"></script>
+    <script src="relations.js?v=4"></script>
+</body>
+</html>

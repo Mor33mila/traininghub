@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -54,6 +55,53 @@ class AttendanceServiceTest {
         AttendanceRequest request = request(false);
         request.setEntryTime(null);
         assertThrows(InvalidAttendanceException.class, () -> service.create(request));
+    }
+
+    @Test
+    void recordsAbsenceWithoutEntryOrExitTimes() {
+        Enrollment enrollment = confirmedEnrollment();
+        when(enrollmentRepository.findById(enrollmentId)).thenReturn(Optional.of(enrollment));
+        when(courseClient.findById(courseId)).thenReturn(new CourseSummary(courseId, 10,
+                BigDecimal.TEN, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)));
+        when(attendanceRepository.existsByEnrollmentIdAndLessonDate(any(), any())).thenReturn(false);
+        when(attendanceRepository.save(any(Attendance.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        AttendanceRequest request = request(true);
+        request.setEntryTime(null);
+        request.setExitTime(null);
+
+        Attendance attendance = service.create(request);
+
+        assertEquals(true, attendance.getAbsent());
+        assertEquals(0, BigDecimal.ZERO.compareTo(attendance.getAttendedHours()));
+    }
+
+    @Test
+    void excludesRequestedAndWithdrawnEnrollmentsFromParticipantFrequency() {
+        UUID participantId = UUID.randomUUID();
+        Enrollment confirmed = confirmedEnrollment();
+        confirmed.setParticipantId(participantId);
+        Enrollment requested = new Enrollment();
+        requested.setId(UUID.randomUUID());
+        requested.setCourseId(UUID.randomUUID());
+        requested.setParticipantId(participantId);
+        requested.setStatus(EnrollmentStatus.REQUESTED);
+        Enrollment withdrawn = new Enrollment();
+        withdrawn.setId(UUID.randomUUID());
+        withdrawn.setCourseId(UUID.randomUUID());
+        withdrawn.setParticipantId(participantId);
+        withdrawn.setStatus(EnrollmentStatus.WITHDRAWN);
+        when(enrollmentRepository.findAllByParticipantId(participantId))
+            .thenReturn(List.of(confirmed, requested, withdrawn));
+        when(courseClient.findById(courseId)).thenReturn(new CourseSummary(courseId, 10,
+                BigDecimal.TEN, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 12, 31)));
+        when(attendanceRepository.sumAttendedHours(enrollmentId)).thenReturn(BigDecimal.valueOf(7));
+
+        var frequency = service.calculateParticipantFrequency(participantId);
+
+        assertEquals(0, BigDecimal.TEN.compareTo(frequency.totalHours()));
+        assertEquals(0, BigDecimal.valueOf(7).compareTo(frequency.attendedHours()));
+        assertEquals(0, BigDecimal.valueOf(70).compareTo(frequency.percentage()));
     }
 
     private Enrollment confirmedEnrollment() {

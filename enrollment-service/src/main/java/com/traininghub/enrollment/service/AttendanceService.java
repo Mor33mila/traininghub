@@ -106,6 +106,8 @@ public class AttendanceService {
         BigDecimal attendedTotal = BigDecimal.ZERO;
         BigDecimal courseHoursTotal = BigDecimal.ZERO;
         for (Enrollment enrollment : enrollmentRepository.findAllByParticipantId(participantId)) {
+            if (enrollment.getStatus() != EnrollmentStatus.CONFIRMED
+                    && enrollment.getStatus() != EnrollmentStatus.COMPLETED) continue;
             CourseSummary course = courseClient.findById(enrollment.getCourseId());
             if (course.totalHours() == null || course.totalHours().signum() <= 0) continue;
             attendedTotal = attendedTotal.add(attendanceRepository.sumAttendedHours(enrollment.getId()));

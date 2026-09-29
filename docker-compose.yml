@@ -1,0 +1,102 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-TrainingHubRoot123!}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$${MYSQL_ROOT_PASSWORD}\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  identity-service:
+    build: ./identity-service
+    environment:
+      SERVER_PORT: 8080
+      DB_URL: jdbc:mysql://mysql:3306/traininghub_identity?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-TrainingHubRoot123!}
+      JWT_SECRET: ${JWT_SECRET:-dHJhaW5pbmdodWItZGVtby1qd3Qtc2VjcmV0LTIwMjY=}
+      JWT_ISSUER: traininghub-identity
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-TrainingHubAdmin123!}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@traininghub.local}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  course-service:
+    build: ./course-service
+    environment:
+      SERVER_PORT: 8081
+      DB_URL: jdbc:mysql://mysql:3306/traininghub_courses?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-TrainingHubRoot123!}
+      JWT_SECRET: ${JWT_SECRET:-dHJhaW5pbmdodWItZGVtby1qd3Qtc2VjcmV0LTIwMjY=}
+      JWT_ISSUER: traininghub-identity
+    ports:
+      - "127.0.0.1:8081:8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  participant-service:
+    build: ./participant-service
+    environment:
+      SERVER_PORT: 8082
+      DB_URL: jdbc:mysql://mysql:3306/traininghub_participants?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-TrainingHubRoot123!}
+      JWT_SECRET: ${JWT_SECRET:-dHJhaW5pbmdodWItZGVtby1qd3Qtc2VjcmV0LTIwMjY=}
+      JWT_ISSUER: traininghub-identity
+    ports:
+      - "127.0.0.1:8082:8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  enrollment-service:
+    build: ./enrollment-service
+    environment:
+      SERVER_PORT: 8083
+      DB_URL: jdbc:mysql://mysql:3306/traininghub_enrollments?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-TrainingHubRoot123!}
+      JWT_SECRET: ${JWT_SECRET:-dHJhaW5pbmdodWItZGVtby1qd3Qtc2VjcmV0LTIwMjY=}
+      JWT_ISSUER: traininghub-identity
+      COURSE_SERVICE_URL: http://course-service:8081
+      PARTICIPANT_SERVICE_URL: http://participant-service:8082
+      ATTENDANCE_MINIMUM_THRESHOLD: ${ATTENDANCE_MINIMUM_THRESHOLD:-80}
+    ports:
+      - "127.0.0.1:8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      course-service:
+        condition: service_started
+      participant-service:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "127.0.0.1:8088:80"
+    depends_on:
+      - identity-service
+      - course-service
+      - participant-service
+      - enrollment-service
+    restart: unless-stopped
+
+volumes:
+  mysql-data:

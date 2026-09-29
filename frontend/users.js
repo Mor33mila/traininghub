@@ -1,5 +1,6 @@
 const USER_ROLES = ['ADMINISTRATOR', 'TUTOR', 'TEACHER'];
 const IDENTITY_API = 'http://localhost:8080';
+let loadedUsers = [];
 
 function isAdministrator() {
     const user = JSON.parse(localStorage.getItem('traininghub_user') || 'null');
@@ -14,10 +15,11 @@ function renderUsers(users) {
     $('user-list').innerHTML = users.length ? users.map(user => `
         <article class="record-card user-record" data-user-id="${user.id}">
             <div>
-                <strong>${user.firstName} ${user.lastName}</strong>
-                <small>${user.username} · ${user.email}</small>
+                <strong>${escapeHtml(user.firstName)} ${escapeHtml(user.lastName)}</strong>
+                <small>${escapeHtml(user.username)} · ${escapeHtml(user.email)}</small>
                 <div class="user-controls">
-                    <select class="user-role-select" aria-label="Ruolo di ${user.username}">
+                    <button class="secondary-button user-edit-button" type="button">Modifica</button>
+                    <select class="user-role-select" aria-label="Ruolo di ${escapeHtml(user.username)}">
                         ${USER_ROLES.map(role => `<option value="${role}" ${role === user.role ? 'selected' : ''}>${userRoleLabel(role)}</option>`).join('')}
                     </select>
                     <button class="secondary-button role-save-button" type="button">Salva ruolo</button>
@@ -31,8 +33,8 @@ function renderUsers(users) {
 async function loadUsers() {
     if (!isAdministrator()) return;
     try {
-        const response = await api(`${IDENTITY_API}/api/users`);
-        renderUsers(response.content || []);
+        loadedUsers = await getAllPages(`${IDENTITY_API}/api/users`);
+        renderUsers(loadedUsers);
     } catch (error) {
         $('user-list').innerHTML = `<p class="form-error">${error.message}</p>`;
     }
@@ -58,23 +60,34 @@ function configureUsersArea() {
     if (usersEventsReady) return;
     usersEventsReady = true;
     $('users-nav-button').addEventListener('click', showUsersSection);
-    $('new-user-toggle').addEventListener('click', () => $('user-form').classList.toggle('hidden'));
+    $('new-user-toggle').addEventListener('click', () => {
+        $('user-form').reset();
+        $('user-id').value = '';
+        $('user-submit').textContent = 'Crea utente';
+        $('user-form').classList.remove('hidden');
+    });
     $('cancel-user').addEventListener('click', () => $('user-form').classList.add('hidden'));
 
     $('user-form').addEventListener('submit', async event => {
         event.preventDefault();
         try {
-            await api(`${IDENTITY_API}/api/users`, json({
+            const userId = $('user-id').value;
+            const body = {
                 username: $('user-username').value,
                 password: $('user-password').value,
                 firstName: $('user-first-name').value,
                 lastName: $('user-last-name').value,
                 email: $('user-email').value,
                 role: $('user-role-select').value
-            }));
+            };
+            await api(`${IDENTITY_API}/api/users${userId ? `/${userId}` : ''}`, {
+                ...json(body),
+                method: userId ? 'PUT' : 'POST'
+            });
             $('user-form').reset();
             $('user-form').classList.add('hidden');
-            showToast('Utente creato');
+            $('user-id').value = '';
+            showToast(userId ? 'Utente aggiornato' : 'Utente creato');
             loadUsers();
         } catch (error) {
             $('user-error').textContent = error.message;
@@ -85,6 +98,20 @@ function configureUsersArea() {
         const card = event.target.closest('.user-record');
         if (!card) return;
         const userId = card.dataset.userId;
+        if (event.target.classList.contains('user-edit-button')) {
+            const user = loadedUsers.find(item => item.id === userId);
+            $('user-id').value = user.id;
+            $('user-username').value = user.username;
+            $('user-password').value = '';
+            $('user-first-name').value = user.firstName;
+            $('user-last-name').value = user.lastName;
+            $('user-email').value = user.email;
+            $('user-role-select').value = user.role;
+            $('user-submit').textContent = 'Aggiorna utente';
+            $('user-error').textContent = '';
+            $('user-form').classList.remove('hidden');
+            return;
+        }
         try {
             if (event.target.classList.contains('role-save-button')) {
                 const role = card.querySelector('.user-role-select').value;

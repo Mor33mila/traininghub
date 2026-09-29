@@ -1,0 +1,4 @@
+CREATE DATABASE IF NOT EXISTS traininghub_identity CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS traininghub_courses CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS traininghub_participants CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+CREATE DATABASE IF NOT EXISTS traininghub_enrollments CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;

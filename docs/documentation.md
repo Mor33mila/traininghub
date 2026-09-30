@@ -86,13 +86,13 @@ I ruoli applicativi sono:
   -----------------------------------------------------------------------
   Ruolo                               Responsabilità
   ----------------------------------- -----------------------------------
-  **ADMIN**                           Gestione completa del sistema,
+  **ADMINISTRATOR (Amministratore)** Gestione completa del sistema,
                                       utenti, audit ed esportazioni
 
   **TUTOR**                           Gestione operativa di corsi,
                                       iscrizioni, lezioni e presenze
 
-  **DOCENTE**                         Consultazione dei corsi assegnati e
+  **TEACHER (Docente)**               Consultazione dei corsi assegnati e
                                       delle relative informazioni
   -----------------------------------------------------------------------
 

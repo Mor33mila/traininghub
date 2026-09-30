@@ -9,8 +9,9 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="users.css?v=2">
-    <link rel="stylesheet" href="dashboard.css?v=1">
-    <link rel="stylesheet" href="visual-refresh.css?v=5">
+    <link rel="stylesheet" href="dashboard.css?v=4">
+    <link rel="stylesheet" href="visual-refresh.css?v=9">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 </head>
 <body>
     <main id="login-view" class="login-shell">
@@ -51,6 +52,8 @@
                 <button class="nav-button" data-section="enrollments">Iscrizioni</button>
                 <button class="nav-button" data-section="calendar">Calendario</button>
                 <button class="nav-button" data-section="attendance">Presenze</button>
+                <button class="nav-button hidden" data-section="audit">Audit modifiche</button>
+                <button class="nav-button hidden" data-section="exports">Esportazioni</button>
             </nav>
         </aside>
 
@@ -76,6 +79,11 @@
                     <section><div class="section-heading compact"><h3>Posti disponibili</h3></div><div id="overview-capacity" class="record-list"></div></section>
                     <section><div class="section-heading compact"><h3>Sotto la soglia minima</h3></div><div id="overview-at-risk" class="record-list"></div></section>
                 </div>
+                <div class="dashboard-charts">
+                    <section><div class="section-heading compact"><h3>Corsi per stato</h3></div><div class="chart-card"><canvas id="chart-courses-status" role="img" aria-label="Distribuzione dei corsi per stato"></canvas><p id="chart-courses-status-empty" class="muted hidden">Nessun corso da rappresentare.</p></div></section>
+                    <section><div class="section-heading compact"><h3>Iscrizioni per stato</h3></div><div class="chart-card"><canvas id="chart-enrollments-status" role="img" aria-label="Distribuzione delle iscrizioni per stato"></canvas><p id="chart-enrollments-status-empty" class="muted hidden">Dati non disponibili per questo ruolo.</p></div></section>
+                    <section><div class="section-heading compact"><h3>Distribuzione frequenza</h3></div><div class="chart-card"><canvas id="chart-attendance-distribution" role="img" aria-label="Distribuzione della frequenza dei partecipanti"></canvas><p id="chart-attendance-distribution-empty" class="muted hidden">Dati non disponibili per questo ruolo.</p></div></section>
+                </div>
             </section>
 
                <section id="users-section" class="page-section hidden">
@@ -97,11 +105,27 @@
             <section id="courses-section" class="page-section hidden">
                 <div class="section-heading"><div><p class="eyebrow">COURSE SERVICE</p><h3>Catalogo corsi</h3></div><button id="new-course-toggle" class="primary-button">Nuovo corso</button></div>
                 <form id="course-form" class="form-card hidden form-grid"><input id="course-id" type="hidden"><label>Codice<input id="course-code" required></label><label>Titolo<input id="course-title" required></label><label>Descrizione<textarea id="course-description" rows="3"></textarea></label><label>Area formativa<input id="course-area"></label><label>Ore totali<input id="course-hours" type="number" min="0.01" step="0.01" required></label><label>Data inizio<input id="course-start" type="date" required></label><label>Data fine<input id="course-end" type="date" required></label><label>Capienza<input id="course-capacity" type="number" min="1" required></label><label>Modalita<select id="course-mode"><option value="PRESENCE">Presenza</option><option value="DISTANCE">Distanza</option><option value="MIXED">Mista</option></select></label><label>Stato<select id="course-status"><option value="SCHEDULED">Programmato</option><option value="IN_PROGRESS">In svolgimento</option><option value="COMPLETED">Concluso</option><option value="CANCELLED">Annullato</option></select></label><label>Docente<select id="course-instructor"><option value="">Nessun docente assegnato</option></select></label><div class="form-actions"><button id="course-submit" class="primary-button" type="submit">Salva corso</button><button id="cancel-course" class="secondary-button" type="button">Annulla</button></div><p id="course-error" class="form-error"></p></form>
-                <label class="search-field">Cerca corsi<input id="course-search" type="search" placeholder="Codice o titolo"></label>
+                <div class="search-controls">
+                    <label class="search-field">Cerca corsi<input id="course-search" type="search" placeholder="Codice o titolo"></label>
+                    <details class="advanced-filters">
+                        <summary>Filtri avanzati</summary>
+                        <div class="filter-grid">
+                            <label>Stato<select id="course-filter-status"><option value="">Tutti gli stati</option><option value="SCHEDULED">Programmato</option><option value="IN_PROGRESS">In svolgimento</option><option value="COMPLETED">Concluso</option><option value="CANCELLED">Annullato</option></select></label>
+                            <label>Modalita<select id="course-filter-mode"><option value="">Tutte le modalita</option><option value="PRESENCE">Presenza</option><option value="DISTANCE">Distanza</option><option value="MIXED">Mista</option></select></label>
+                            <label>Area formativa<input id="course-filter-area"></label>
+                            <label>Dal<input id="course-filter-from" type="date"></label>
+                            <label>Al<input id="course-filter-to" type="date"></label>
+                            <label>Capienza minima<input id="course-filter-capacity" type="number" min="1"></label>
+                            <label>Ore minime<input id="course-filter-hours" type="number" min="0" step="0.01"></label>
+                        </div>
+                        <div class="filter-actions"><button id="course-filter-reset" class="secondary-button" type="button">Azzera filtri</button></div>
+                    </details>
+                    <span id="course-filter-count" class="filter-result-count muted" aria-live="polite"></span>
+                </div>
                 <div id="course-list" class="record-list"></div>
             </section>
 
-            <section id="participants-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">PARTICIPANT SERVICE</p><h3>Anagrafica partecipanti</h3></div><button id="new-participant-toggle" class="primary-button">Nuovo partecipante</button></div><form id="participant-form" class="form-card hidden form-grid"><input id="participant-id" type="hidden"><label>Nome<input id="participant-first-name" required></label><label>Cognome<input id="participant-last-name" required></label><label>Codice fiscale<input id="participant-tax-code" required></label><label>Data di nascita<input id="participant-birth-date" type="date" required></label><label>E-mail<input id="participant-email" type="email" required></label><label>Telefono<input id="participant-phone"></label><label>Titolo di studio<input id="participant-education"></label><label>Stato occupazionale<input id="participant-employment"></label><div class="form-actions"><button id="participant-submit" class="primary-button" type="submit">Salva partecipante</button><button id="cancel-participant" class="secondary-button" type="button">Annulla</button></div><p id="participant-error" class="form-error"></p></form><label class="search-field">Cerca partecipanti<input id="participant-search" type="search" placeholder="Cognome, codice fiscale o e-mail"></label><div id="participant-list" class="record-list"></div></section>
+            <section id="participants-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">PARTICIPANT SERVICE</p><h3>Anagrafica partecipanti</h3></div><button id="new-participant-toggle" class="primary-button">Nuovo partecipante</button></div><form id="participant-form" class="form-card hidden form-grid"><input id="participant-id" type="hidden"><label>Nome<input id="participant-first-name" required></label><label>Cognome<input id="participant-last-name" required></label><label>Codice fiscale<input id="participant-tax-code" required></label><label>Data di nascita<input id="participant-birth-date" type="date" required></label><label>E-mail<input id="participant-email" type="email" required></label><label>Telefono<input id="participant-phone"></label><label>Titolo di studio<input id="participant-education"></label><label>Stato occupazionale<input id="participant-employment"></label><div class="form-actions"><button id="participant-submit" class="primary-button" type="submit">Salva partecipante</button><button id="cancel-participant" class="secondary-button" type="button">Annulla</button></div><p id="participant-error" class="form-error"></p></form><div class="search-controls"><label class="search-field">Cerca partecipanti<input id="participant-search" type="search" placeholder="Cognome, codice fiscale o e-mail"></label><details class="advanced-filters"><summary>Filtri avanzati</summary><div class="filter-grid"><label>Stato<select id="participant-filter-active"><option value="">Tutti</option><option value="true">Attivi</option><option value="false">Disattivati</option></select></label><label>Titolo di studio<input id="participant-filter-education"></label><label>Stato occupazionale<input id="participant-filter-employment"></label><label>Nati dal<input id="participant-filter-birth-from" type="date"></label><label>Nati entro<input id="participant-filter-birth-to" type="date"></label></div><div class="filter-actions"><button id="participant-filter-reset" class="secondary-button" type="button">Azzera filtri</button></div></details><span id="participant-filter-count" class="filter-result-count muted" aria-live="polite"></span></div><div id="participant-list" class="record-list"></div></section>
 
             <section id="enrollments-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">ENROLLMENT SERVICE</p><h3>Nuova iscrizione</h3></div></div><form id="enrollment-form" class="form-card form-grid"><label>Corso<select id="enrollment-course-id" required><option value="">Seleziona un corso</option></select></label><label>Partecipante<select id="enrollment-participant-id" required><option value="">Seleziona un partecipante</option></select></label><div class="form-actions"><button class="primary-button" type="submit">Crea iscrizione</button></div><p id="enrollment-error" class="form-error"></p></form><div class="section-heading compact"><h3>Iscrizioni recenti</h3></div><div id="enrollment-list" class="record-list"></div></section>
 
@@ -140,10 +164,47 @@
             </section>
 
             <section id="attendance-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">ATTENDANCE SERVICE</p><h3 id="attendance-heading">Presenze</h3></div></div><form id="attendance-form" class="form-card form-grid"><label>Corso<select id="attendance-course-id" required><option value="">Seleziona un corso</option></select></label><label>Iscrizione<select id="attendance-enrollment-id" required><option value="">Seleziona un'iscrizione</option></select></label><label>Data lezione<input id="attendance-date" type="date" required></label><label>Entrata<input id="attendance-entry" type="time" required></label><label>Uscita<input id="attendance-exit" type="time" required></label><label class="checkbox-label"><input id="attendance-absent" type="checkbox"> Assente</label><label>Giustificazione<input id="attendance-justification"></label><div class="form-actions"><button class="primary-button" type="submit">Registra presenza</button></div><p id="attendance-error" class="form-error"></p></form><div id="attendance-list" class="record-list"></div></section>
+
+            <section id="audit-section" class="page-section hidden">
+                <div class="section-heading"><div><p class="eyebrow">ACTIVITY RECORD</p><h3>Audit delle modifiche</h3></div><button id="audit-refresh" class="secondary-button" type="button">Aggiorna</button></div>
+                <div class="audit-controls">
+                    <label>Cerca<input id="audit-search" type="search" placeholder="Utente o ID elemento"></label>
+                    <details class="advanced-filters"><summary>Filtri avanzati</summary><div class="filter-grid"><label>Risorsa<select id="audit-resource-filter"><option value="">Tutte le risorse</option><option value="COURSE">Corsi</option><option value="PARTICIPANT">Partecipanti</option><option value="ENROLLMENT">Iscrizioni</option><option value="ATTENDANCE">Presenze</option><option value="LESSON">Lezioni</option><option value="USER">Utenti</option></select></label><label>Azione<select id="audit-action-filter"><option value="">Tutte le azioni</option><option value="CREATE">Creazione</option><option value="UPDATE">Modifica</option><option value="DELETE">Eliminazione</option><option value="STATUS_CHANGE">Cambio stato</option><option value="ROLE_CHANGE">Cambio ruolo</option></select></label><label>Dal<input id="audit-date-from" type="date"></label><label>Al<input id="audit-date-to" type="date"></label></div><div class="filter-actions"><button id="audit-filter-reset" class="secondary-button" type="button">Azzera filtri</button></div></details>
+                </div>
+                <div class="audit-table-wrap"><table class="audit-table" aria-label="Modifiche registrate"><thead><tr><th>Data e ora</th><th>Utente</th><th>Operazione</th><th>Risorsa</th><th>ID elemento</th></tr></thead><tbody id="audit-rows"><tr><td colspan="5">Caricamento registro...</td></tr></tbody></table></div>
+                <div class="audit-pagination"><span id="audit-page-label" aria-live="polite"></span><div><button id="audit-previous" class="secondary-button" type="button" disabled>Precedente</button><button id="audit-next" class="secondary-button" type="button" disabled>Successiva</button></div></div>
+            </section>
+
+            <section id="exports-section" class="page-section hidden">
+                <div class="section-heading"><div><p class="eyebrow">DATA PORTABILITY</p><h3>Esporta dati</h3></div></div>
+                <form id="export-form" class="form-card export-form">
+                    <div class="export-selection-heading"><h4>Dataset inclusi</h4><label class="export-select-all"><input id="export-select-all" type="checkbox" checked> Seleziona tutti</label></div>
+                    <div class="export-datasets">
+                        <label class="export-dataset-option"><input type="checkbox" data-export-dataset="courses" checked> Corsi</label>
+                        <label class="export-dataset-option"><input type="checkbox" data-export-dataset="participants" checked> Partecipanti</label>
+                        <label class="export-dataset-option"><input type="checkbox" data-export-dataset="enrollments" checked> Iscrizioni</label>
+                        <label class="export-dataset-option"><input type="checkbox" data-export-dataset="attendance" checked> Presenze</label>
+                        <label class="export-dataset-option"><input type="checkbox" data-export-dataset="lessons" checked> Lezioni</label>
+                        <label class="export-dataset-option" data-export-admin-only><input type="checkbox" data-export-dataset="users" checked> Utenti</label>
+                        <label class="export-dataset-option" data-export-admin-only><input type="checkbox" data-export-dataset="audit" checked> Audit modifiche</label>
+                    </div>
+                    <div class="export-actions">
+                        <button class="secondary-button" type="button" data-export-format="pdf">Scarica PDF</button>
+                        <button class="secondary-button" type="button" data-export-format="xlsx">Scarica Excel</button>
+                        <button class="secondary-button" type="button" data-export-format="csv">Scarica CSV</button>
+                        <button class="primary-button" type="button" data-export-format="json">Scarica JSON</button>
+                    </div>
+                    <p id="export-status" class="muted" role="status" aria-live="polite"></p>
+                </form>
+            </section>
         </section>
     </main>
     <div id="toast" class="toast" role="status"></div>
-    <script src="app.js?v=9"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="app.js?v=16"></script>
     <script src="users.js?v=5"></script>
     <script src="relations.js?v=5"></script>
 </body>

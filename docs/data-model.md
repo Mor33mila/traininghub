@@ -69,8 +69,18 @@ erDiagram
         boolean absent
         string justification
     }
+    AUDIT_EVENT {
+        uuid id PK
+        string actor
+        string action
+        string resource
+        string recordId
+        datetime occurredAt
+    }
 ```
 
 `FK` indica un riferimento logico tra microservizi, non una foreign key MySQL cross-database. Course code, codice fiscale ed e-mail sono univoci. Una sola iscrizione tra `REQUESTED` e `CONFIRMED` e' ammessa per coppia partecipante-corso; le iscrizioni in tali stati occupano capienza. Le ore corso sono positive, le ore presenza non negative, e le lezioni pianificate devono ricadere nel periodo del corso con orario finale successivo a quello iniziale.
 
 Il file `database/init/01-create-databases.sql` crea i database vuoti. Le tabelle sono create/aggiornate da Hibernate (`ddl-auto=update`); non sono ancora presenti migrazioni versionate.
+
+`AUDIT_EVENT` e' conservato nel database Identity e registra solo l'attore, l'azione, il tipo e l'ID della risorsa e l'istante della modifica; non contiene snapshot o payload.

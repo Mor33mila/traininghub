@@ -3,11 +3,29 @@
 .dashboard-details>section{min-width:0}
 .dashboard-details .record-card{min-width:0}
 .dashboard-details .record-card strong,.dashboard-details .record-card small{overflow-wrap:anywhere}
+.dashboard-charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;margin-top:34px}
+.dashboard-charts>section{min-width:0}
+.chart-card{position:relative;height:276px;padding:16px;border:1px solid var(--line);border-radius:6px;background:var(--panel);box-shadow:var(--shadow-card);transition:transform 220ms ease,border-color 220ms ease,box-shadow 220ms ease}
+.chart-card:hover{transform:translateY(-2px);border-color:#a8c5b4;box-shadow:0 10px 28px rgb(27 55 42 / 10%)}
+.chart-card canvas{display:block}
+.chart-card p.muted{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;margin:0;padding:16px;text-align:center}
+.export-form{display:grid;gap:24px}
+.export-selection-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.export-selection-heading h4{margin:0;color:var(--ink);font:600 17px 'Fraunces',Georgia,serif}
+.export-select-all,.export-dataset-option{display:flex;align-items:center;gap:10px;color:var(--ink);font:500 13px 'DM Sans','Segoe UI',sans-serif;cursor:pointer}
+.export-select-all input,.export-dataset-option input{width:17px;height:17px;margin:0;accent-color:var(--teal)}
+.export-datasets{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr));gap:9px}
+.export-dataset-option{min-height:48px;padding:10px 12px;border:1px solid var(--line);border-radius:5px;background:var(--panel);transition:border-color 160ms ease,background-color 160ms ease}
+.export-dataset-option:hover{border-color:#a8c5b4;background:#f5f8f5}
+.export-actions{display:flex;flex-wrap:wrap;gap:10px}
+#export-status{min-height:18px;margin:0;font:12px 'DM Sans','Segoe UI',sans-serif}
 .search-field{display:grid;gap:7px;max-width:460px;margin:18px 0;font:700 12px Arial,sans-serif;color:var(--muted);text-transform:uppercase}
 .search-field input,.form-grid textarea{border:1px solid var(--line);background:#fff;padding:12px 13px;color:var(--ink);border-radius:2px}
 .form-grid textarea{font:14px Georgia,'Times New Roman',serif;resize:vertical;min-height:76px}
 .course-record details{margin-top:8px;color:var(--muted)}
 .course-record summary{cursor:pointer;font:700 12px Arial,sans-serif}
 .course-record details small{display:block;margin-top:6px}
+@media(max-width:1000px){.dashboard-charts{grid-template-columns:1fr 1fr}}
 @media(max-width:850px){.dashboard-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.dashboard-details{grid-template-columns:1fr;gap:18px}}
+@media(max-width:650px){.dashboard-charts{grid-template-columns:1fr}}
 @media(max-width:520px){.dashboard-stats{grid-template-columns:1fr}}

@@ -16,6 +16,19 @@ let selectedCalendarDate = toDateKey(new Date());
 let calendarCourses = [];
 let calendarLessons = [];
 let toastTimeout;
+let auditCurrentPage = 0;
+let auditPageData;
+const overviewCharts = {};
+let auditSearchTimer;
+const exportColumns = {
+	courses: { id: 'ID', courseCode: 'Codice', title: 'Titolo', description: 'Descrizione', trainingArea: 'Area', totalHours: 'Ore totali', startDate: 'Inizio', endDate: 'Fine', maximumCapacity: 'Capienza', mode: 'Modalita', status: 'Stato', instructorId: 'Docente ID' },
+	participants: { id: 'ID', firstName: 'Nome', lastName: 'Cognome', taxCode: 'Codice fiscale', birthDate: 'Data di nascita', email: 'E-mail', phone: 'Telefono', educationLevel: 'Titolo di studio', employmentStatus: 'Stato occupazionale', active: 'Attivo' },
+	enrollments: { id: 'ID', courseCode: 'Codice corso', courseTitle: 'Corso', courseId: 'Corso ID', participantId: 'Partecipante ID', enrollmentDate: 'Data iscrizione', status: 'Stato' },
+	attendance: { id: 'ID', courseCode: 'Codice corso', courseTitle: 'Corso', enrollmentId: 'Iscrizione ID', lessonDate: 'Data lezione', entryTime: 'Entrata', exitTime: 'Uscita', attendedHours: 'Ore frequentate', absent: 'Assente', justification: 'Giustificazione' },
+	lessons: { id: 'ID', courseCode: 'Codice corso', courseTitle: 'Corso', courseId: 'Corso ID', title: 'Lezione', lessonDate: 'Data', startTime: 'Inizio', endTime: 'Fine', notes: 'Note' },
+	users: { id: 'ID', username: 'Nome utente', firstName: 'Nome', lastName: 'Cognome', email: 'E-mail', role: 'Ruolo', active: 'Attivo' },
+	audit: { id: 'ID', actor: 'Utente', action: 'Azione', resource: 'Risorsa', recordId: 'Elemento ID', occurredAt: 'Data e ora' }
+};
 
 const $ = id => document.getElementById(id);
 const json = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -39,6 +52,7 @@ function escapeHtml(value) {
 }
 
 async function api(url, options = {}) {
+	const method = (options.method || 'GET').toUpperCase();
 	const response = await fetch(url, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
 	if (response.status === 401) {
 		logout();
@@ -54,8 +68,87 @@ async function api(url, options = {}) {
 		} catch { }
 		throw new Error(message);
 	}
-	if (response.status === 204) return null;
-	return response.json();
+	const result = response.status === 204 ? null : await response.json();
+	if (!['GET', 'HEAD'].includes(method)) await recordAuditEvent(url, method, result);
+	return result;
+}
+
+async function recordAuditEvent(url, method, result) {
+	const path = new URL(url).pathname;
+	const segments = path.split('/').filter(Boolean);
+	const resources = {
+		courses: 'COURSE',
+		participants: 'PARTICIPANT',
+		enrollments: 'ENROLLMENT',
+		attendance: 'ATTENDANCE',
+		lessons: 'LESSON',
+		users: 'USER'
+	};
+	const resource = resources[segments[1]];
+	if (!resource) return;
+
+	const action = method === 'POST' ? 'CREATE'
+		: method === 'DELETE' ? 'DELETE'
+			: method === 'PATCH' && path.endsWith('/role') ? 'ROLE_CHANGE'
+				: method === 'PATCH' && path.endsWith('/status') ? 'STATUS_CHANGE'
+					: 'UPDATE';
+	const recordId = result?.id || (segments.length > 2 ? segments[2] : null);
+	try {
+		await fetch(`${API.identity}/api/audit/events`, {
+			method: 'POST',
+			headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+			body: JSON.stringify({ action, resource, recordId })
+		});
+	} catch { }
+}
+
+function renderAuditEvents() {
+	const resourceLabels = {
+		COURSE: 'Corso', PARTICIPANT: 'Partecipante', ENROLLMENT: 'Iscrizione',
+		ATTENDANCE: 'Presenza', LESSON: 'Lezione', USER: 'Utente'
+	};
+	const actionLabels = {
+		CREATE: 'Creazione', UPDATE: 'Modifica', DELETE: 'Eliminazione',
+		STATUS_CHANGE: 'Cambio stato', ROLE_CHANGE: 'Cambio ruolo'
+	};
+	const events = auditPageData?.content || [];
+	const hasFilters = $('audit-search').value.trim() || $('audit-resource-filter').value
+		|| $('audit-action-filter').value || $('audit-date-from').value || $('audit-date-to').value;
+	$('audit-rows').innerHTML = events.length ? events.map(event => `
+		<tr>
+			<td>${escapeHtml(new Date(event.occurredAt).toLocaleString('it-IT'))}</td>
+			<td>${escapeHtml(event.actor)}</td>
+			<td>${escapeHtml(actionLabels[event.action] || event.action)}</td>
+			<td>${escapeHtml(resourceLabels[event.resource] || event.resource)}</td>
+			<td>${escapeHtml(event.recordId || '-')}</td>
+		</tr>`).join('') : `<tr><td colspan="5">${hasFilters ? 'Nessuna modifica corrisponde ai filtri.' : 'Nessuna modifica registrata.'}</td></tr>`;
+	const totalPages = auditPageData?.totalPages || 0;
+	const totalElements = auditPageData?.totalElements || 0;
+	$('audit-page-label').textContent = `Pagina ${auditCurrentPage + 1} di ${Math.max(totalPages, 1)} · ${totalElements} modifiche`;
+	$('audit-previous').disabled = auditCurrentPage <= 0;
+	$('audit-next').disabled = auditCurrentPage + 1 >= totalPages;
+}
+
+async function loadAudit() {
+	$('audit-rows').innerHTML = '<tr><td colspan="5">Caricamento registro...</td></tr>';
+	try {
+		const params = new URLSearchParams({ page: String(auditCurrentPage), size: '50' });
+		const query = $('audit-search').value.trim();
+		const resource = $('audit-resource-filter').value;
+		const action = $('audit-action-filter').value;
+		const from = $('audit-date-from').value;
+		const to = $('audit-date-to').value;
+		if (query) params.set('query', query);
+		if (resource) params.set('resource', resource);
+		if (action) params.set('action', action);
+		if (from) params.set('from', from);
+		if (to) params.set('to', to);
+		auditPageData = await api(`${API.identity}/api/audit/events?${params}`);
+		renderAuditEvents();
+	} catch (error) {
+		$('audit-rows').innerHTML = `<tr><td colspan="5">${escapeHtml(error.message)}</td></tr>`;
+		$('audit-page-label').textContent = '';
+	}
 }
 
 async function getAllPages(url) {
@@ -72,6 +165,186 @@ async function getAllPages(url) {
 		page += 1;
 	}
 	return items;
+}
+
+const exportDatasetLabels = {
+	courses: 'Corsi', participants: 'Partecipanti', enrollments: 'Iscrizioni',
+	attendance: 'Presenze', lessons: 'Lezioni', users: 'Utenti', audit: 'Audit modifiche'
+};
+
+async function collectExportData(datasetIds) {
+	const needsCourses = datasetIds.some(id => ['courses', 'enrollments', 'attendance', 'lessons'].includes(id));
+	const courses = needsCourses ? await getAllPages(`${API.course}/api/courses`) : [];
+	const data = {};
+	await Promise.all(datasetIds.map(async id => {
+		switch (id) {
+			case 'courses':
+				data[id] = courses;
+				break;
+			case 'participants':
+				data[id] = await getAllPages(`${API.participant}/api/participants`);
+				break;
+			case 'enrollments':
+				data[id] = (await Promise.all(courses.map(async course =>
+					(await getAllPages(`${API.enrollment}/api/enrollments/course/${course.id}`))
+						.map(enrollment => ({ ...enrollment, courseCode: course.courseCode, courseTitle: course.title }))
+				))).flat();
+				break;
+			case 'attendance':
+				data[id] = (await Promise.all(courses.map(async course =>
+					(await api(`${API.enrollment}/api/attendance/course/${course.id}`))
+						.map(record => ({ ...record, courseCode: course.courseCode, courseTitle: course.title }))
+				))).flat();
+				break;
+			case 'lessons':
+				data[id] = (await Promise.all(courses.map(async course =>
+					(await api(`${API.enrollment}/api/lessons/course/${course.id}?from=${course.startDate}&to=${course.endDate}`))
+						.map(lesson => ({ ...lesson, courseCode: course.courseCode, courseTitle: course.title }))
+				))).flat();
+				break;
+			case 'users':
+				data[id] = await getAllPages(`${API.identity}/api/users`);
+				break;
+			case 'audit':
+				data[id] = await getAllPages(`${API.identity}/api/audit/events`);
+				break;
+		}
+	}));
+	return data;
+}
+
+function exportCell(value) {
+	if (value == null) return '';
+	return typeof value === 'object' ? JSON.stringify(value) : String(value);
+}
+
+function csvForDataset(datasetId, rows) {
+	const columns = exportColumns[datasetId];
+	const fields = Object.keys(columns);
+	const quote = value => {
+		let text = exportCell(value);
+		if (/^[\t\r=+@-]/.test(text)) text = `'${text}`;
+		return `"${text.replace(/"/g, '""')}"`;
+	};
+	return '\uFEFF' + [
+		fields.map(field => quote(columns[field])).join(';'),
+		...rows.map(row => fields.map(field => quote(row[field])).join(';'))
+	].join('\r\n');
+}
+
+function downloadFile(blob, filename) {
+	const link = document.createElement('a');
+	const objectUrl = URL.createObjectURL(blob);
+	link.href = objectUrl;
+	link.download = filename;
+	document.body.append(link);
+	link.click();
+	link.remove();
+	setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+function exportFilename(datasetIds, extension) {
+	const label = datasetIds.length === 1 ? datasetIds[0] : 'selezione';
+	return `traininghub_${label}_${new Date().toISOString().slice(0, 10)}.${extension}`;
+}
+
+function exportAsJson(data, datasetIds) {
+	const report = {
+		generatedAt: new Date().toISOString(),
+		datasets: Object.fromEntries(datasetIds.map(id => [id, data[id]]))
+	};
+	downloadFile(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json;charset=utf-8' }),
+		exportFilename(datasetIds, 'json'));
+}
+
+async function exportAsCsv(data, datasetIds) {
+	if (datasetIds.length === 1) {
+		downloadFile(new Blob([csvForDataset(datasetIds[0], data[datasetIds[0]])], { type: 'text/csv;charset=utf-8' }),
+			exportFilename(datasetIds, 'csv'));
+		return;
+	}
+	if (!window.JSZip) throw new Error('Libreria ZIP non disponibile. Riprova tra qualche istante.');
+	const archive = new window.JSZip();
+	datasetIds.forEach(id => archive.file(`${id}.csv`, csvForDataset(id, data[id])));
+	const blob = await archive.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+	downloadFile(blob, exportFilename(datasetIds, 'zip'));
+}
+
+function exportAsExcel(data, datasetIds) {
+	if (!window.XLSX) throw new Error('Libreria Excel non disponibile. Riprova tra qualche istante.');
+	const workbook = window.XLSX.utils.book_new();
+	datasetIds.forEach(id => {
+		const columns = exportColumns[id];
+		const fields = Object.keys(columns);
+		const rows = data[id].map(row => fields.map(field => exportCell(row[field])));
+		const sheet = window.XLSX.utils.aoa_to_sheet([[...Object.values(columns)], ...rows]);
+		const sheetName = exportDatasetLabels[id].replace(/[\\/?*:[\]]/g, ' ').slice(0, 31);
+		window.XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+	});
+	window.XLSX.writeFile(workbook, exportFilename(datasetIds, 'xlsx'));
+}
+
+function exportAsPdf(data, datasetIds) {
+	const JsPDF = window.jspdf?.jsPDF;
+	if (!JsPDF) throw new Error('Libreria PDF non disponibile. Riprova tra qualche istante.');
+	const pdf = new JsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+	datasetIds.forEach((id, index) => {
+		if (index > 0) pdf.addPage();
+		pdf.setFont('helvetica', 'bold');
+		pdf.setFontSize(16);
+		pdf.text(`TrainingHub · ${exportDatasetLabels[id]}`, 14, 16);
+		pdf.setFont('helvetica', 'normal');
+		pdf.setFontSize(9);
+		pdf.text(`Generato il ${new Date().toLocaleString('it-IT')}`, 14, 22);
+		const columns = exportColumns[id];
+		const fields = Object.keys(columns);
+		if (!data[id].length) {
+			pdf.text('Nessun dato disponibile.', 14, 32);
+			return;
+		}
+		pdf.autoTable({
+			startY: 27,
+			head: [Object.values(columns)],
+			body: data[id].map(row => fields.map(field => exportCell(row[field]))),
+			styles: { font: 'helvetica', fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+			headStyles: { fillColor: [25, 53, 43] },
+			alternateRowStyles: { fillColor: [242, 246, 242] },
+			margin: { left: 14, right: 14 }
+		});
+	});
+	pdf.save(exportFilename(datasetIds, 'pdf'));
+}
+
+async function exportReport(format) {
+	if (!hasRole('ADMINISTRATOR')) {
+		showToast('Solo gli amministratori possono esportare dati.');
+		return;
+	}
+	const datasetIds = [...document.querySelectorAll('[data-export-dataset]:checked')]
+		.filter(input => !input.closest('.export-dataset-option').hidden)
+		.map(input => input.dataset.exportDataset);
+	if (!datasetIds.length) {
+		showToast('Seleziona almeno un dataset da esportare.');
+		return;
+	}
+	const buttons = [...document.querySelectorAll('[data-export-format]')];
+	buttons.forEach(button => { button.disabled = true; });
+	$('export-status').textContent = 'Preparazione del report…';
+	try {
+		const data = await collectExportData(datasetIds);
+		if (format === 'json') exportAsJson(data, datasetIds);
+		else if (format === 'csv') await exportAsCsv(data, datasetIds);
+		else if (format === 'xlsx') exportAsExcel(data, datasetIds);
+		else exportAsPdf(data, datasetIds);
+		const total = Object.values(data).reduce((sum, rows) => sum + rows.length, 0);
+		$('export-status').textContent = `Report pronto · ${total} record esportati.`;
+		showToast('Esportazione completata.');
+	} catch (error) {
+		$('export-status').textContent = error.message;
+		showToast(error.message);
+	} finally {
+		buttons.forEach(button => { button.disabled = false; });
+	}
 }
 
 function setView(logged) {
@@ -106,40 +379,238 @@ function applyRoleExperience() {
 	const participantButton = document.querySelector('[data-section="participants"]');
 	const enrollmentButton = document.querySelector('[data-section="enrollments"]');
 	const attendanceButton = document.querySelector('[data-section="attendance"]');
+	const auditButton = document.querySelector('[data-section="audit"]');
+	const exportsButton = document.querySelector('[data-section="exports"]');
 	const courseCreateButton = $('new-course-toggle');
 	const participantCreateButton = $('new-participant-toggle');
 	participantButton.classList.toggle('hidden', teacher === true);
 	enrollmentButton.classList.toggle('hidden', teacher === true);
 	attendanceButton.classList.toggle('hidden', false);
+	auditButton.classList.toggle('hidden', administrator !== true);
+	exportsButton.classList.toggle('hidden', administrator !== true);
 	courseCreateButton.classList.toggle('hidden', teacher === true);
 	participantCreateButton.classList.toggle('hidden', administrator !== true);
 	$('new-lesson-toggle').classList.toggle('hidden', teacher === true);
 	$('attendance-form').classList.toggle('hidden', teacher === true);
 	$('attendance-heading').textContent = teacher ? 'Presenze dei corsi assegnati' : 'Registra presenza';
 	if (teacher) $('attendance-list').classList.remove('hidden');
+	configureExportPermissions();
+}
+
+function updateExportSelectAll() {
+	const options = [...document.querySelectorAll('[data-export-dataset]')]
+		.filter(input => !input.closest('.export-dataset-option').hidden);
+	const selected = options.filter(input => input.checked).length;
+	const selectAll = $('export-select-all');
+	selectAll.checked = selected === options.length;
+	selectAll.indeterminate = selected > 0 && selected < options.length;
+}
+
+function configureExportPermissions() {
+	const administrator = hasRole('ADMINISTRATOR');
+	document.querySelectorAll('[data-export-dataset]').forEach(input => {
+		input.closest('.export-dataset-option').hidden = !administrator;
+		input.checked = administrator;
+	});
+	updateExportSelectAll();
 }
 
 function switchSection(name) {
+	if (['audit', 'exports'].includes(name) && !hasRole('ADMINISTRATOR')) return;
 	document.querySelectorAll('.page-section').forEach(section => section.classList.add('hidden'));
 	$(`${name}-section`).classList.remove('hidden');
 	document.querySelectorAll('.nav-button').forEach(button => button.classList.toggle('active', button.dataset.section === name));
-	$('page-title').textContent = { overview: 'Panoramica', users: 'Utenti', courses: 'Corsi', participants: 'Partecipanti', enrollments: 'Iscrizioni', calendar: 'Calendario', attendance: 'Presenze' }[name];
+	$('page-title').textContent = { overview: 'Panoramica', users: 'Utenti', courses: 'Corsi', participants: 'Partecipanti', enrollments: 'Iscrizioni', calendar: 'Calendario', attendance: 'Presenze', audit: 'Audit modifiche', exports: 'Esportazioni' }[name];
 	if (name === 'overview') loadOverview();
 	if (name === 'courses') loadCourses();
 	if (name === 'participants') loadParticipants();
 	if (name === 'enrollments') loadEnrollments();
 	if (name === 'calendar') loadCalendar();
 	if (name === 'attendance') loadAttendance();
+	if (name === 'audit') loadAudit();
 }
 
 function card(title, meta, badge = '') {
 	return `<article class="record-card"><div><strong>${escapeHtml(title)}</strong><small>${escapeHtml(meta)}</small></div>${badge ? `<span class="badge">${escapeHtml(badge)}</span>` : ''}</article>`;
 }
 
+function renderChart(canvasId, emptyId, config) {
+	const empty = $(emptyId);
+	const canvas = $(canvasId);
+	if (overviewCharts[canvasId]) {
+		overviewCharts[canvasId].destroy();
+		delete overviewCharts[canvasId];
+	}
+	if (!config || typeof Chart === 'undefined') {
+		canvas.classList.add('hidden');
+		empty.classList.remove('hidden');
+		return;
+	}
+	canvas.classList.remove('hidden');
+	empty.classList.add('hidden');
+	overviewCharts[canvasId] = new Chart(canvas, config);
+}
+
+function countBy(items, key) {
+	const counts = new Map();
+	items.forEach(item => counts.set(item[key], (counts.get(item[key]) || 0) + 1));
+	return counts;
+}
+
+const chartColors = {
+	primary: '#16735b', accent: '#df855e', deep: '#19352b', danger: '#b84f50', muted: '#66756c'
+};
+
+function dashboardChartOptions(showLegend = false, cartesian = false) {
+	const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+	const options = {
+		responsive: true,
+		maintainAspectRatio: false,
+		animation: { duration: reduceMotion ? 0 : 850, easing: 'easeOutQuart' },
+		interaction: { intersect: false, mode: 'index' },
+		plugins: {
+			legend: {
+				display: showLegend,
+				position: 'bottom',
+				labels: {
+					usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 18,
+					color: chartColors.muted, font: { family: 'DM Sans', size: 11 }
+				}
+			},
+			tooltip: {
+				backgroundColor: '#19352b', titleColor: '#ffffff', bodyColor: '#edf3ee',
+				padding: 12, cornerRadius: 7, boxPadding: 5,
+				titleFont: { family: 'DM Sans', size: 12, weight: '600' },
+				bodyFont: { family: 'DM Sans', size: 12 },
+				callbacks: {
+					label: context => ` ${context.dataset.label ? `${context.dataset.label}: ` : ''}${context.parsed?.y ?? context.parsed}`
+				}
+			}
+		}
+	};
+	if (cartesian) {
+		options.scales = {
+			x: {
+				grid: { display: false }, border: { display: false },
+				ticks: { color: chartColors.muted, font: { family: 'DM Sans', size: 11 } }
+			},
+			y: {
+				beginAtZero: true, grid: { color: 'rgb(27 44 36 / 8%)' }, border: { display: false },
+				ticks: { precision: 0, color: chartColors.muted, padding: 8, font: { family: 'DM Sans', size: 11 } }
+			}
+		};
+	}
+	return options;
+}
+
+const doughnutCenterPlugin = {
+	id: 'doughnut-center-label',
+	beforeDraw(chart) {
+		if (!chart.chartArea) return;
+		const total = chart.data.datasets[0].data.reduce((sum, value) => sum + value, 0);
+		const { left, right, top, bottom } = chart.chartArea;
+		const centerX = (left + right) / 2;
+		const centerY = (top + bottom) / 2;
+		const { ctx } = chart;
+		ctx.save();
+		ctx.textAlign = 'center';
+		ctx.fillStyle = '#1b2c24';
+		ctx.font = '600 25px DM Sans';
+		ctx.fillText(total, centerX, centerY + 2);
+		ctx.fillStyle = '#66756c';
+		ctx.font = '600 9px DM Sans';
+		ctx.fillText('CORSI', centerX, centerY + 19);
+		ctx.restore();
+	}
+};
+
+function renderCoursesStatusChart(courses) {
+	const labels = { SCHEDULED: 'Programmato', IN_PROGRESS: 'In svolgimento', COMPLETED: 'Concluso', CANCELLED: 'Annullato' };
+	const colors = { SCHEDULED: chartColors.primary, IN_PROGRESS: chartColors.accent, COMPLETED: chartColors.deep, CANCELLED: chartColors.danger };
+	const counts = countBy(courses, 'status');
+	const statuses = Object.keys(labels).filter(status => counts.get(status));
+	renderChart('chart-courses-status', 'chart-courses-status-empty', statuses.length ? {
+		type: 'doughnut',
+		data: {
+			labels: statuses.map(status => labels[status]),
+			datasets: [{
+				data: statuses.map(status => counts.get(status)),
+				backgroundColor: statuses.map(status => colors[status]),
+				borderColor: '#ffffff', borderWidth: 3, borderRadius: 5, hoverOffset: 7
+			}]
+		},
+		options: { ...dashboardChartOptions(true), cutout: '72%' },
+		plugins: [doughnutCenterPlugin]
+	} : null);
+}
+
+function renderEnrollmentsStatusChart(enrollments) {
+	const labels = { REQUESTED: 'Richiesta', CONFIRMED: 'Confermata', WITHDRAWN: 'Ritirata', COMPLETED: 'Completata' };
+	const colors = { REQUESTED: chartColors.accent, CONFIRMED: chartColors.primary, WITHDRAWN: chartColors.danger, COMPLETED: chartColors.deep };
+	const counts = countBy(enrollments, 'status');
+	const statuses = Object.keys(labels).filter(status => counts.get(status));
+	renderChart('chart-enrollments-status', 'chart-enrollments-status-empty', statuses.length ? {
+		type: 'bar',
+		data: {
+			labels: statuses.map(status => labels[status]),
+			datasets: [{
+				label: 'Iscrizioni', data: statuses.map(status => counts.get(status)),
+				backgroundColor: statuses.map(status => colors[status]), borderRadius: 7,
+				borderSkipped: false, maxBarThickness: 48
+			}]
+		},
+		options: dashboardChartOptions(false, true)
+	} : null);
+}
+
+function renderAttendanceDistributionChart(frequencies) {
+	const measured = frequencies.filter(item => Number(item.frequency.totalHours) > 0);
+	const buckets = ['0-59%', '60-79%', '80-100%'];
+	const counts = [0, 0, 0];
+	measured.forEach(item => {
+		const percentage = Number(item.frequency.percentage);
+		if (percentage < 60) counts[0] += 1;
+		else if (percentage < 80) counts[1] += 1;
+		else counts[2] += 1;
+	});
+	renderChart('chart-attendance-distribution', 'chart-attendance-distribution-empty', measured.length ? {
+		type: 'bar',
+		data: {
+			labels: buckets,
+			datasets: [{
+				label: 'Partecipanti', data: counts,
+				backgroundColor: [chartColors.danger, chartColors.accent, chartColors.primary],
+				borderRadius: 7, borderSkipped: false, maxBarThickness: 52
+			}]
+		},
+		options: dashboardChartOptions(false, true)
+	} : null);
+}
+
 async function loadCourses() {
 	const query = $('course-search').value.trim();
 	const url = `${API.course}/api/courses${query ? `?query=${encodeURIComponent(query)}` : ''}`;
-	state.courses = await getAllPages(url);
+	const courses = await getAllPages(url);
+	const status = $('course-filter-status').value;
+	const mode = $('course-filter-mode').value;
+	const area = $('course-filter-area').value.trim().toLocaleLowerCase('it');
+	const dateFrom = $('course-filter-from').value;
+	const dateTo = $('course-filter-to').value;
+	const minCapacity = Number($('course-filter-capacity').value) || 0;
+	const minHours = Number($('course-filter-hours').value) || 0;
+	const normalizedQuery = query.toLocaleLowerCase('it');
+	state.courses = courses.filter(course => {
+		const searchText = `${course.courseCode} ${course.title}`.toLocaleLowerCase('it');
+		return (!normalizedQuery || searchText.includes(normalizedQuery))
+			&& (!status || course.status === status)
+			&& (!mode || course.mode === mode)
+			&& (!area || String(course.trainingArea || '').toLocaleLowerCase('it').includes(area))
+			&& (!dateFrom || course.endDate >= dateFrom)
+			&& (!dateTo || course.startDate <= dateTo)
+			&& Number(course.maximumCapacity) >= minCapacity
+			&& Number(course.totalHours) >= minHours;
+	});
+	$('course-filter-count').textContent = `${state.courses.length} di ${courses.length} corsi`;
 	$('course-list').innerHTML = state.courses.length ? state.courses.map(course => `
 		<article class="record-card course-record" data-course-id="${escapeHtml(course.id)}">
 			<div><strong>${escapeHtml(course.title)}</strong><small>${escapeHtml(course.courseCode)} · ${escapeHtml(course.startDate)} - ${escapeHtml(course.endDate)}</small>
@@ -152,7 +623,19 @@ async function loadCourses() {
 async function loadParticipants() {
 	const query = $('participant-search').value.trim();
 	const url = `${API.participant}/api/participants${query ? `?query=${encodeURIComponent(query)}` : ''}`;
-	state.participants = await getAllPages(url);
+	const participants = await getAllPages(url);
+	const active = $('participant-filter-active').value;
+	const education = $('participant-filter-education').value.trim().toLocaleLowerCase('it');
+	const employment = $('participant-filter-employment').value.trim().toLocaleLowerCase('it');
+	const birthFrom = $('participant-filter-birth-from').value;
+	const birthTo = $('participant-filter-birth-to').value;
+	state.participants = participants.filter(person =>
+		(!active || String(person.active) === active)
+		&& (!education || String(person.educationLevel || '').toLocaleLowerCase('it').includes(education))
+		&& (!employment || String(person.employmentStatus || '').toLocaleLowerCase('it').includes(employment))
+		&& (!birthFrom || person.birthDate >= birthFrom)
+		&& (!birthTo || person.birthDate <= birthTo));
+	$('participant-filter-count').textContent = `${state.participants.length} di ${participants.length} partecipanti`;
 	$('participant-list').innerHTML = state.participants.length ? state.participants.map(person => `
 		<article class="record-card participant-record" data-participant-id="${escapeHtml(person.id)}">
 			<div><strong>${escapeHtml(person.firstName)} ${escapeHtml(person.lastName)}</strong><small>${escapeHtml(person.email)} · ${escapeHtml(person.taxCode)}</small></div>
@@ -383,6 +866,9 @@ async function loadOverview() {
 			$('stat-average-attendance').textContent = '--';
 			$('overview-capacity').innerHTML = '<p class="muted">Dati non disponibili per questo ruolo.</p>';
 			$('overview-at-risk').innerHTML = '<p class="muted">Dati non disponibili per questo ruolo.</p>';
+			renderCoursesStatusChart(courses);
+			renderEnrollmentsStatusChart([]);
+			renderAttendanceDistributionChart([]);
 			return;
 		}
 
@@ -422,6 +908,9 @@ async function loadOverview() {
 				return card(name, `${item.frequency.attendedHours}/${item.frequency.totalHours} ore · ${item.frequency.percentage}%`, 'A RISCHIO');
 			}).join('')
 			: '<p class="muted">Nessun partecipante sotto la soglia minima.</p>';
+		renderCoursesStatusChart(courses);
+		renderEnrollmentsStatusChart(enrollments);
+		renderAttendanceDistributionChart(frequencies);
 	} catch (error) {
 		showToast(error.message);
 	}
@@ -450,6 +939,53 @@ $('login-form').addEventListener('submit', async event => {
 
 $('logout-button').addEventListener('click', logout);
 document.querySelectorAll('.nav-button').forEach(button => button.addEventListener('click', () => switchSection(button.dataset.section)));
+$('export-select-all').addEventListener('change', () => {
+	document.querySelectorAll('[data-export-dataset]').forEach(input => {
+		if (!input.closest('.export-dataset-option').hidden) input.checked = $('export-select-all').checked;
+	});
+	updateExportSelectAll();
+});
+document.querySelectorAll('[data-export-dataset]').forEach(input => {
+	input.addEventListener('change', updateExportSelectAll);
+});
+document.querySelectorAll('[data-export-format]').forEach(button => {
+	button.addEventListener('click', () => exportReport(button.dataset.exportFormat));
+});
+document.querySelectorAll('#audit-resource-filter, #audit-action-filter, #audit-date-from, #audit-date-to').forEach(filter => {
+	filter.addEventListener('change', () => {
+		auditCurrentPage = 0;
+		loadAudit();
+	});
+});
+$('audit-filter-reset').addEventListener('click', () => {
+	$('audit-search').value = '';
+	$('audit-resource-filter').value = '';
+	$('audit-action-filter').value = '';
+	$('audit-date-from').value = '';
+	$('audit-date-to').value = '';
+	auditCurrentPage = 0;
+	loadAudit();
+});
+$('audit-search').addEventListener('input', () => {
+	clearTimeout(auditSearchTimer);
+	auditSearchTimer = setTimeout(() => {
+		auditCurrentPage = 0;
+		loadAudit();
+	}, 250);
+});
+$('audit-refresh').addEventListener('click', loadAudit);
+$('audit-previous').addEventListener('click', async () => {
+	if (auditCurrentPage > 0) {
+		auditCurrentPage -= 1;
+		await loadAudit();
+	}
+});
+$('audit-next').addEventListener('click', async () => {
+	if (auditCurrentPage + 1 < (auditPageData?.totalPages || 0)) {
+		auditCurrentPage += 1;
+		await loadAudit();
+	}
+});
 const mobileMenuToggle = $('mobile-menu-toggle');
 const sidebar = document.querySelector('.sidebar');
 
@@ -568,13 +1104,34 @@ $('cancel-participant').addEventListener('click', () => $('participant-form').cl
 
 let courseSearchTimer;
 let participantSearchTimer;
-$('course-search').addEventListener('input', () => {
+
+function scheduleCourseLoad() {
 	clearTimeout(courseSearchTimer);
 	courseSearchTimer = setTimeout(() => loadCourses().catch(error => showToast(error.message)), 250);
-});
-$('participant-search').addEventListener('input', () => {
+}
+
+function scheduleParticipantLoad() {
 	clearTimeout(participantSearchTimer);
 	participantSearchTimer = setTimeout(() => loadParticipants().catch(error => showToast(error.message)), 250);
+}
+
+document.querySelectorAll('#course-search, #course-filter-status, #course-filter-mode, #course-filter-area, #course-filter-from, #course-filter-to, #course-filter-capacity, #course-filter-hours').forEach(field => {
+	field.addEventListener('input', scheduleCourseLoad);
+	field.addEventListener('change', scheduleCourseLoad);
+});
+document.querySelectorAll('#participant-search, #participant-filter-active, #participant-filter-education, #participant-filter-employment, #participant-filter-birth-from, #participant-filter-birth-to').forEach(field => {
+	field.addEventListener('input', scheduleParticipantLoad);
+	field.addEventListener('change', scheduleParticipantLoad);
+});
+$('course-filter-reset').addEventListener('click', () => {
+	$('course-search').value = '';
+	document.querySelectorAll('#courses-section .advanced-filters input, #courses-section .advanced-filters select').forEach(field => { field.value = ''; });
+	scheduleCourseLoad();
+});
+$('participant-filter-reset').addEventListener('click', () => {
+	$('participant-search').value = '';
+	document.querySelectorAll('#participants-section .advanced-filters input, #participants-section .advanced-filters select').forEach(field => { field.value = ''; });
+	scheduleParticipantLoad();
 });
 
 $('course-list').addEventListener('click', async event => {

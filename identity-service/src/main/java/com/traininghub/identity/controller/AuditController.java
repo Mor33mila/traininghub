@@ -9,15 +9,14 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import java.time.Instant;
 import java.util.Objects;
-import java.time.LocalDate;
 
 @RestController
 @RequestMapping("/api/audit/events")
@@ -41,8 +40,8 @@ public class AuditController {
                                            @RequestParam(required = false) String query,
                                            @RequestParam(required = false) AuditResource resource,
                                            @RequestParam(required = false) AuditAction action,
-                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-                                           @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+                                           @RequestParam(required = false) Instant from,
+                                           @RequestParam(required = false) Instant to) {
         return service.search(page, size, query, resource, action, from, to);
     }
 }

@@ -74,6 +74,7 @@ async function api(url, options = {}) {
 }
 
 async function recordAuditEvent(url, method, result) {
+	// Nel registro inviamo solo metadati: il payload dell'operazione puo' contenere dati personali.
 	const path = new URL(url).pathname;
 	const segments = path.split('/').filter(Boolean);
 	const resources = {
@@ -141,14 +142,21 @@ async function loadAudit() {
 		if (query) params.set('query', query);
 		if (resource) params.set('resource', resource);
 		if (action) params.set('action', action);
-		if (from) params.set('from', from);
-		if (to) params.set('to', to);
+		if (from) params.set('from', auditDateBoundary(from));
+		if (to) params.set('to', auditDateBoundary(to, 1));
 		auditPageData = await api(`${API.identity}/api/audit/events?${params}`);
 		renderAuditEvents();
 	} catch (error) {
 		$('audit-rows').innerHTML = `<tr><td colspan="5">${escapeHtml(error.message)}</td></tr>`;
 		$('audit-page-label').textContent = '';
 	}
+}
+
+function auditDateBoundary(date, dayOffset = 0) {
+	// Le date del controllo sono interpretate nel fuso locale prima di convertirle in istanti UTC.
+	const boundary = new Date(`${date}T00:00:00`);
+	boundary.setDate(boundary.getDate() + dayOffset);
+	return boundary.toISOString();
 }
 
 async function getAllPages(url) {
@@ -187,12 +195,14 @@ async function collectExportData(datasetIds) {
 			case 'enrollments':
 				data[id] = (await Promise.all(courses.map(async course =>
 					(await getAllPages(`${API.enrollment}/api/enrollments/course/${course.id}`))
+						// Codice e titolo evitano che iscrizioni e presenze siano identificabili solo tramite UUID.
 						.map(enrollment => ({ ...enrollment, courseCode: course.courseCode, courseTitle: course.title }))
 				))).flat();
 				break;
 			case 'attendance':
 				data[id] = (await Promise.all(courses.map(async course =>
 					(await api(`${API.enrollment}/api/attendance/course/${course.id}`))
+						// Aggiunge il contesto del corso senza duplicare dati anagrafici del partecipante.
 						.map(record => ({ ...record, courseCode: course.courseCode, courseTitle: course.title }))
 				))).flat();
 				break;
@@ -223,6 +233,7 @@ function csvForDataset(datasetId, rows) {
 	const fields = Object.keys(columns);
 	const quote = value => {
 		let text = exportCell(value);
+		// Il prefisso impedisce ai fogli di calcolo di interpretare il testo come formula.
 		if (/^[\t\r=+@-]/.test(text)) text = `'${text}`;
 		return `"${text.replace(/"/g, '""')}"`;
 	};
@@ -438,6 +449,7 @@ function renderChart(canvasId, emptyId, config) {
 	const empty = $(emptyId);
 	const canvas = $(canvasId);
 	if (overviewCharts[canvasId]) {
+		// Chart.js non consente di associare una seconda istanza allo stesso canvas.
 		overviewCharts[canvasId].destroy();
 		delete overviewCharts[canvasId];
 	}
@@ -507,6 +519,7 @@ const doughnutCenterPlugin = {
 	id: 'doughnut-center-label',
 	beforeDraw(chart) {
 		if (!chart.chartArea) return;
+		// Il totale segue il centro del foro anche durante animazioni e ridimensionamenti.
 		const total = chart.data.datasets[0].data.reduce((sum, value) => sum + value, 0);
 		const { left, right, top, bottom } = chart.chartArea;
 		const centerX = (left + right) / 2;
@@ -605,6 +618,7 @@ async function loadCourses() {
 			&& (!status || course.status === status)
 			&& (!mode || course.mode === mode)
 			&& (!area || String(course.trainingArea || '').toLocaleLowerCase('it').includes(area))
+			// Seleziona i corsi che si sovrappongono all'intervallo richiesto.
 			&& (!dateFrom || course.endDate >= dateFrom)
 			&& (!dateTo || course.startDate <= dateTo)
 			&& Number(course.maximumCapacity) >= minCapacity

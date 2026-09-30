@@ -19,7 +19,10 @@ TrainingHub centralizza le informazioni di un ente che gestisce piu' percorsi fo
 3. Gestire anagrafiche partecipanti, cercarle per cognome/codice fiscale/e-mail e impedire duplicati di codice fiscale ed e-mail.
 4. Iscrivere un partecipante a un corso, registrare la data, impedire duplicati attivi e superamento della capienza, e gestire quattro stati.
 5. Registrare presenze o assenze per iscrizioni ammissibili, calcolare ore e frequenza e segnalare chi scende sotto la soglia configurata.
-6. Presentare in dashboard conteggi di corsi e partecipanti, iscrizioni, stato corsi, posti residui, frequenza media e partecipanti a rischio.
+6. Presentare in dashboard conteggi e grafici per stato di corsi/iscrizioni, posti residui, frequenza media e fasce di frequenza.
+7. Ricercare corsi, partecipanti e audit con filtri combinabili; filtrare il calendario per corso.
+8. Consentire agli amministratori l'esportazione selettiva di corsi, partecipanti, iscrizioni, presenze, lezioni, utenti e audit in PDF, Excel, CSV e JSON.
+9. Consultare un audit delle mutazioni inviate dalla UI, con attore, azione, risorsa, ID e timestamp.
 
 ## Requisiti non funzionali e vincoli
 

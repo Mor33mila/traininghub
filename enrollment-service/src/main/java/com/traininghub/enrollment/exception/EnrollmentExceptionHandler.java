@@ -20,6 +20,11 @@ public class EnrollmentExceptionHandler {
         return build(HttpStatus.NOT_FOUND, exception.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(LessonNotFoundException.class)
+    public ResponseEntity<ApiError> lessonNotFound(LessonNotFoundException exception, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, exception.getMessage(), request, Map.of());
+    }
+
     @ExceptionHandler({DuplicateEnrollmentException.class, CourseCapacityExceededException.class,
             DuplicateAttendanceException.class, DataIntegrityViolationException.class})
     /** Converte duplicati, corsi pieni e presenze duplicate in HTTP 409. */
@@ -38,6 +43,11 @@ public class EnrollmentExceptionHandler {
     /** Converte le violazioni delle regole presenze in HTTP 400. */
     public ResponseEntity<ApiError> invalidAttendance(InvalidAttendanceException exception,
                                                        HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
+    }
+
+    @ExceptionHandler(InvalidLessonException.class)
+    public ResponseEntity<ApiError> invalidLesson(InvalidLessonException exception, HttpServletRequest request) {
         return build(HttpStatus.BAD_REQUEST, exception.getMessage(), request, Map.of());
     }
 

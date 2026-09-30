@@ -30,7 +30,7 @@ flowchart LR
 - **Identity Service**: credenziali BCrypt, utenti, ruoli, login e firma/verifica dei JWT.
 - **Course Service**: anagrafica dei corsi, validazione, ricerca, stato e assegnazione docente.
 - **Participant Service**: anagrafica, ricerca per cognome/codice fiscale/e-mail, unicita' e disattivazione logica.
-- **Enrollment Service**: ciclo di vita delle iscrizioni, controllo di capienza e duplicati, presenze e frequenza.
+- **Enrollment Service**: ciclo di vita delle iscrizioni, calendario delle lezioni, controllo di capienza e duplicati, presenze e frequenza.
 - **Frontend**: schermate di accesso, operazioni e dashboard; conserva il token nel local storage e lo invia come Bearer.
 
 Ogni servizio e' organizzato in controller, service, repository, entity, DTO, mapper, eccezioni e configurazione. Ogni database e' separato logicamente. Enrollment conserva gli identificativi dei servizi proprietari e li verifica tramite client REST; non condivide le loro entity.

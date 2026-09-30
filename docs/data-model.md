@@ -5,6 +5,7 @@ Ogni microservizio persiste le proprie entita' nel rispettivo database. Le relaz
 ```mermaid
 erDiagram
     USER ||--o{ COURSE : teaches
+    COURSE ||--o{ LESSON : schedules
     COURSE ||--o{ ENROLLMENT : has
     PARTICIPANT ||--o{ ENROLLMENT : joins
     ENROLLMENT ||--o{ ATTENDANCE : records
@@ -29,6 +30,15 @@ erDiagram
         string mode
         string status
         uuid instructorId FK
+    }
+    LESSON {
+        uuid id PK
+        uuid courseId FK
+        string title
+        date lessonDate
+        time startTime
+        time endTime
+        string notes
     }
     PARTICIPANT {
         uuid id PK
@@ -61,6 +71,6 @@ erDiagram
     }
 ```
 
-`FK` indica un riferimento logico tra microservizi, non una foreign key MySQL cross-database. Course code, codice fiscale ed e-mail sono univoci. Una sola iscrizione tra `REQUESTED` e `CONFIRMED` e' ammessa per coppia partecipante-corso; le iscrizioni in tali stati occupano capienza. Le ore corso sono positive, le ore presenza non negative, e una lezione deve ricadere nel periodo del corso.
+`FK` indica un riferimento logico tra microservizi, non una foreign key MySQL cross-database. Course code, codice fiscale ed e-mail sono univoci. Una sola iscrizione tra `REQUESTED` e `CONFIRMED` e' ammessa per coppia partecipante-corso; le iscrizioni in tali stati occupano capienza. Le ore corso sono positive, le ore presenza non negative, e le lezioni pianificate devono ricadere nel periodo del corso con orario finale successivo a quello iniziale.
 
 Il file `database/init/01-create-databases.sql` crea i database vuoti. Le tabelle sono create/aggiornate da Hibernate (`ddl-auto=update`); non sono ancora presenti migrazioni versionate.

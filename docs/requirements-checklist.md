@@ -8,6 +8,7 @@
 | CRUD utenti e corsi | REST API Identity e Course; form frontend con modifica, stato e ruolo | Implementato |
 | CRUD, ricerca e disattivazione partecipanti | REST API Participant e query per cognome/codice fiscale/e-mail; form frontend | Implementato |
 | Iscrizioni, stati, duplicati e capienza | Enrollment API; UI elenco e aggiornamento stato | Implementato |
+| Calendario lezioni per ruolo | API CRUD lezioni, calendario mensile e filtro sui corsi assegnati ai docenti | Implementato; test API/runtime e regole servizio verificati |
 | Presenze, assenze, ore e frequenza | Attendance API e validazioni; soglia da `ATTENDANCE_MINIMUM_THRESHOLD` | Backend implementato; verificare i casi e i report in demo |
 | Dashboard: corsi, partecipanti, iscrizioni, frequenza, capienza, rischio | `frontend/app.js` e API Enrollment | Implementato per amministratore/tutor; dati limitati ai permessi del docente |
 | Frontend end-to-end | `frontend/index.html`, `app.js`, `relations.js` | Login/UI serviti; CRUD, iscrizione e presenza collegati; percorso con dati reali da provare manualmente; test browser automatizzati assenti |
@@ -16,7 +17,7 @@
 | Docker e Compose | Dockerfile servizi, Nginx frontend, `docker-compose.yml` e SQL di bootstrap | Build e avvio Compose verificati; MySQL healthy e sei container attivi |
 | README e istruzioni demo | `README.md` e `docs/user-manual.md` | Redatti; prova da ambiente pulito ancora richiesta |
 | Diagrammi architettura e dati | `docs/architecture.md`, `docs/data-model.md` | Redatti; confrontare con la release finale |
-| Test automatici | 23 test Maven esistenti | Passati nell'ambiente di sviluppo; ampliare copertura di security e integrazione |
+| Test automatici | 28 test Maven presenti | Suite enrollment (12 test) passata; ampliare copertura integration/security |
 | Git con branch e commit di feature | Cronologia attuale del repository | Non verificato/da curare dal gruppo secondo le indicazioni del docente |
 | Presentazione e relazione AI | `docs/presentation.md`, `docs/ai-usage.md` | Bozze redatte; completare dati del gruppo e approvazione |
 

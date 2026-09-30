@@ -54,6 +54,8 @@ Aprire <http://localhost:5500>.
 6. In Presenze, scegliere corso e iscrizione confermata, selezionare data e registrare entrata/uscita. Per un'assenza selezionare la casella dedicata e inserire facoltativamente la giustificazione.
 7. Tornare alla Panoramica per vedere conteggi, disponibilita' e frequenze aggiornate.
 
+La sezione **Calendario** consente ad amministratore e tutor di pianificare, modificare ed eliminare lezioni nel periodo del corso. I docenti consultano il calendario dei soli corsi assegnati; la gestione delle lezioni resta riservata ad amministratore e tutor.
+
 Il primo amministratore e' creato all'avvio da `ADMIN_USERNAME`, `ADMIN_PASSWORD` e `ADMIN_EMAIL`. Altri dati demo si possono inserire dalla UI seguendo la procedura sopra.
 
 ## Servizi e API

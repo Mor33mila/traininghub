@@ -11,6 +11,11 @@ const state = {
 	courses: [],
 	participants: []
 };
+let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let selectedCalendarDate = toDateKey(new Date());
+let calendarCourses = [];
+let calendarLessons = [];
+let toastTimeout;
 
 const $ = id => document.getElementById(id);
 const json = body => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -21,9 +26,10 @@ function authHeaders() {
 
 function showToast(message) {
 	const toast = $('toast');
+	clearTimeout(toastTimeout);
 	toast.textContent = message;
 	toast.classList.add('visible');
-	setTimeout(() => toast.classList.remove('visible'), 2800);
+	toastTimeout = setTimeout(() => toast.classList.remove('visible'), 5000);
 }
 
 function escapeHtml(value) {
@@ -107,6 +113,7 @@ function applyRoleExperience() {
 	attendanceButton.classList.toggle('hidden', false);
 	courseCreateButton.classList.toggle('hidden', teacher === true);
 	participantCreateButton.classList.toggle('hidden', administrator !== true);
+	$('new-lesson-toggle').classList.toggle('hidden', teacher === true);
 	$('attendance-form').classList.toggle('hidden', teacher === true);
 	$('attendance-heading').textContent = teacher ? 'Presenze dei corsi assegnati' : 'Registra presenza';
 	if (teacher) $('attendance-list').classList.remove('hidden');
@@ -116,11 +123,12 @@ function switchSection(name) {
 	document.querySelectorAll('.page-section').forEach(section => section.classList.add('hidden'));
 	$(`${name}-section`).classList.remove('hidden');
 	document.querySelectorAll('.nav-button').forEach(button => button.classList.toggle('active', button.dataset.section === name));
-	$('page-title').textContent = { overview: 'Panoramica', users: 'Utenti', courses: 'Corsi', participants: 'Partecipanti', enrollments: 'Iscrizioni', attendance: 'Presenze' }[name];
+	$('page-title').textContent = { overview: 'Panoramica', users: 'Utenti', courses: 'Corsi', participants: 'Partecipanti', enrollments: 'Iscrizioni', calendar: 'Calendario', attendance: 'Presenze' }[name];
 	if (name === 'overview') loadOverview();
 	if (name === 'courses') loadCourses();
 	if (name === 'participants') loadParticipants();
 	if (name === 'enrollments') loadEnrollments();
+	if (name === 'calendar') loadCalendar();
 	if (name === 'attendance') loadAttendance();
 }
 
@@ -238,6 +246,123 @@ async function loadAttendance() {
 	}
 }
 
+function toDateKey(date) {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, '0');
+	const day = String(date.getDate()).padStart(2, '0');
+	return `${year}-${month}-${day}`;
+}
+
+function calendarCanManage() {
+	return hasRole('ADMINISTRATOR') || hasRole('TUTOR');
+}
+
+function renderCalendar() {
+	const monthName = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(calendarMonth);
+	$('calendar-month').textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+	const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+	const lastDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+	const monthStart = toDateKey(firstDay);
+	const monthEnd = toDateKey(lastDay);
+	const mondayOffset = (firstDay.getDay() + 6) % 7;
+	const selectedCourseId = $('calendar-course-filter').value;
+	const visibleLessons = selectedCourseId
+		? calendarLessons.filter(lesson => lesson.courseId === selectedCourseId)
+		: calendarLessons;
+	const monthCourses = calendarCourses.filter(course =>
+		(!selectedCourseId || course.id === selectedCourseId)
+		&& course.startDate <= monthEnd && course.endDate >= monthStart);
+	$('calendar-course-periods').innerHTML = monthCourses.length ? monthCourses.map(course => `
+		<div class="calendar-course-period" data-course-period-id="${escapeHtml(course.id)}">
+			<div><strong>${escapeHtml(course.courseCode)} · ${escapeHtml(course.title)}</strong><small>${escapeHtml(course.startDate)} — ${escapeHtml(course.endDate)}</small></div>
+			<span class="badge">${escapeHtml(course.status)}</span>
+		</div>`).join('') : '<p class="muted calendar-empty">Nessun corso nel mese selezionato.</p>';
+	const cells = [];
+	for (let index = 0; index < 42; index += 1) {
+		const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1 - mondayOffset + index);
+		const dateKey = toDateKey(date);
+		const count = visibleLessons.filter(lesson => lesson.lessonDate === dateKey).length;
+		const outside = date.getMonth() !== calendarMonth.getMonth();
+		const label = new Intl.DateTimeFormat('it-IT', { dateStyle: 'full' }).format(date);
+		cells.push(`<button type="button" role="gridcell" class="calendar-day${outside ? ' outside-month' : ''}${dateKey === selectedCalendarDate ? ' selected' : ''}${count ? ' has-lessons' : ''}" data-date="${dateKey}" aria-label="${escapeHtml(label)}${count ? `, ${count} lezioni` : ''}" aria-selected="${dateKey === selectedCalendarDate}">
+			<span class="calendar-day-number">${date.getDate()}</span>${count ? `<span class="calendar-day-count">${count}</span>` : ''}
+		</button>`);
+	}
+	$('calendar-grid').innerHTML = cells.join('');
+	renderCalendarAgenda(visibleLessons);
+}
+
+function renderCalendarAgenda(lessons = calendarLessons) {
+	const date = new Date(`${selectedCalendarDate}T00:00:00`);
+	$('calendar-day-title').textContent = new Intl.DateTimeFormat('it-IT', {
+		weekday: 'long', day: 'numeric', month: 'long'
+	}).format(date);
+	const selectedCourseId = $('calendar-course-filter').value;
+	const dayCourses = calendarCourses.filter(course =>
+		(!selectedCourseId || course.id === selectedCourseId)
+		&& course.startDate <= selectedCalendarDate && course.endDate >= selectedCalendarDate);
+	const dayLessons = lessons.filter(lesson => lesson.lessonDate === selectedCalendarDate)
+		.sort((left, right) => left.startTime.localeCompare(right.startTime));
+	const courseRows = dayCourses.map(course => `
+		<article class="record-card calendar-course-context">
+			<div><strong>${escapeHtml(course.title)}</strong><small>${escapeHtml(course.courseCode)} · ${escapeHtml(course.startDate)} — ${escapeHtml(course.endDate)}</small></div>
+			<span class="badge">CORSO NEL PERIODO</span>
+		</article>`).join('');
+	const lessonRows = dayLessons.map(lesson => `
+		<article class="record-card calendar-lesson-card" data-lesson-id="${escapeHtml(lesson.id)}">
+			<div><strong>${escapeHtml(lesson.title)}</strong><small>${escapeHtml(lesson.courseTitle)} · ${escapeHtml(lesson.startTime)}-${escapeHtml(lesson.endTime)}</small>${lesson.notes ? `<small>${escapeHtml(lesson.notes)}</small>` : ''}</div>
+			${calendarCanManage() ? `<div class="user-controls"><button class="secondary-button lesson-edit" type="button">Modifica</button><button class="secondary-button lesson-delete" type="button">Elimina</button></div>` : ''}
+		</article>`).join('');
+	$('calendar-lesson-list').innerHTML = courseRows + lessonRows
+		|| '<p class="muted calendar-empty">Nessun corso o lezione per questo giorno.</p>';
+}
+
+async function loadCalendar() {
+	try {
+		calendarCourses = await getAllPages(`${API.course}/api/courses`);
+		const previousFilter = $('calendar-course-filter').value;
+		const options = calendarCourses.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.courseCode)} · ${escapeHtml(course.title)}</option>`).join('');
+		$('calendar-course-filter').innerHTML = '<option value="">Tutti i corsi</option>' + options;
+		if (calendarCourses.some(course => course.id === previousFilter)) $('calendar-course-filter').value = previousFilter;
+		$('lesson-course-id').innerHTML = '<option value="">Seleziona un corso</option>' + calendarCourses
+			.map(course => `<option value="${escapeHtml(course.id)}">${escapeHtml(course.courseCode)} · ${escapeHtml(course.title)}</option>`).join('');
+
+		const first = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+		const last = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0);
+		const from = toDateKey(first);
+		const to = toDateKey(last);
+		const selectedCourseId = $('calendar-course-filter').value;
+		const coursesToLoad = selectedCourseId
+			? calendarCourses.filter(course => course.id === selectedCourseId)
+			: calendarCourses;
+		const results = await Promise.all(coursesToLoad.map(course =>
+			api(`${API.enrollment}/api/lessons/course/${course.id}?from=${from}&to=${to}`)));
+		calendarLessons = results.flatMap((lessons, index) => lessons.map(lesson => ({
+			...lesson,
+			courseTitle: coursesToLoad[index].title
+		})));
+		renderCalendar();
+	} catch (error) {
+		$('calendar-lesson-list').innerHTML = `<p class="form-error">${escapeHtml(error.message)}</p>`;
+	}
+}
+
+function openLessonForm(lesson = null) {
+	if (!calendarCanManage()) return;
+	$('lesson-form').reset();
+	$('lesson-id').value = lesson?.id || '';
+	$('lesson-course-id').value = lesson?.courseId || '';
+	$('lesson-title').value = lesson?.title || '';
+	$('lesson-date').value = lesson?.lessonDate || selectedCalendarDate;
+	$('lesson-start-time').value = lesson?.startTime || '';
+	$('lesson-end-time').value = lesson?.endTime || '';
+	$('lesson-notes').value = lesson?.notes || '';
+	$('lesson-error').textContent = '';
+	$('lesson-submit').textContent = lesson ? 'Aggiorna lezione' : 'Salva lezione';
+	$('lesson-form').classList.remove('hidden');
+	$('lesson-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function loadOverview() {
 	try {
 		const courses = await getAllPages(`${API.course}/api/courses`);
@@ -325,6 +450,22 @@ $('login-form').addEventListener('submit', async event => {
 
 $('logout-button').addEventListener('click', logout);
 document.querySelectorAll('.nav-button').forEach(button => button.addEventListener('click', () => switchSection(button.dataset.section)));
+const mobileMenuToggle = $('mobile-menu-toggle');
+const sidebar = document.querySelector('.sidebar');
+
+function setMobileMenuOpen(open) {
+	sidebar.classList.toggle('menu-open', open);
+	mobileMenuToggle.setAttribute('aria-expanded', String(open));
+	mobileMenuToggle.setAttribute('aria-label', open ? 'Chiudi menu' : 'Apri menu');
+}
+
+mobileMenuToggle.addEventListener('click', () => {
+	setMobileMenuOpen(mobileMenuToggle.getAttribute('aria-expanded') !== 'true');
+});
+document.querySelectorAll('#main-nav .nav-button').forEach(button => button.addEventListener('click', () => setMobileMenuOpen(false)));
+document.addEventListener('keydown', event => {
+	if (event.key === 'Escape') setMobileMenuOpen(false);
+});
 document.querySelectorAll('[data-section-link]').forEach(button => button.addEventListener('click', () => switchSection(button.dataset.sectionLink)));
 $('enrollment-course-id').addEventListener('change', loadEnrollments);
 $('enrollment-list').addEventListener('click', async event => {
@@ -343,6 +484,81 @@ $('enrollment-list').addEventListener('click', async event => {
 		await loadOverview();
 	} catch (error) {
 		showToast(error.message);
+	}
+});
+$('calendar-prev').addEventListener('click', async () => {
+	calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+	selectedCalendarDate = toDateKey(calendarMonth);
+	await loadCalendar();
+});
+$('calendar-next').addEventListener('click', async () => {
+	calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+	selectedCalendarDate = toDateKey(calendarMonth);
+	await loadCalendar();
+});
+$('calendar-today').addEventListener('click', async () => {
+	calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+	selectedCalendarDate = toDateKey(new Date());
+	await loadCalendar();
+});
+$('calendar-course-filter').addEventListener('change', loadCalendar);
+$('calendar-grid').addEventListener('click', event => {
+	const day = event.target.closest('.calendar-day');
+	if (!day) return;
+	selectedCalendarDate = day.dataset.date;
+	const selectedDate = new Date(`${selectedCalendarDate}T00:00:00`);
+	if (selectedDate.getMonth() !== calendarMonth.getMonth()
+		|| selectedDate.getFullYear() !== calendarMonth.getFullYear()) {
+		calendarMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+		loadCalendar();
+	} else {
+		renderCalendar();
+	}
+});
+$('new-lesson-toggle').addEventListener('click', () => openLessonForm());
+$('lesson-cancel').addEventListener('click', () => $('lesson-form').classList.add('hidden'));
+$('lesson-form').addEventListener('submit', async event => {
+	event.preventDefault();
+	const lessonId = $('lesson-id').value;
+	const body = {
+		courseId: $('lesson-course-id').value,
+		title: $('lesson-title').value,
+		lessonDate: $('lesson-date').value,
+		startTime: $('lesson-start-time').value,
+		endTime: $('lesson-end-time').value,
+		notes: $('lesson-notes').value || null
+	};
+	try {
+		await api(`${API.enrollment}/api/lessons${lessonId ? `/${lessonId}` : ''}`, {
+			...json(body),
+			method: lessonId ? 'PUT' : 'POST'
+		});
+		calendarMonth = new Date(`${body.lessonDate}T00:00:00`);
+		calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+		selectedCalendarDate = body.lessonDate;
+		$('lesson-form').classList.add('hidden');
+		showToast(lessonId ? 'Lezione aggiornata' : 'Lezione pianificata');
+		await loadCalendar();
+	} catch (error) {
+		$('lesson-error').textContent = error.message;
+	}
+});
+$('calendar-lesson-list').addEventListener('click', async event => {
+	const record = event.target.closest('.calendar-lesson-card');
+	if (!record) return;
+	const lesson = calendarLessons.find(item => item.id === record.dataset.lessonId);
+	if (event.target.classList.contains('lesson-edit')) {
+		openLessonForm(lesson);
+		return;
+	}
+	if (event.target.classList.contains('lesson-delete') && confirm(`Eliminare la lezione "${lesson?.title || ''}"?`)) {
+		try {
+			await api(`${API.enrollment}/api/lessons/${record.dataset.lessonId}`, { method: 'DELETE' });
+			showToast('Lezione eliminata');
+			await loadCalendar();
+		} catch (error) {
+			showToast(error.message);
+		}
 	}
 });
 $('new-course-toggle').addEventListener('click', () => openCourseForm());

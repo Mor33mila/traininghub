@@ -12,6 +12,10 @@ Aprire il frontend e accedere con le credenziali iniziali configurate per l'ambi
 4. In **Presenze**, selezionare corso e iscrizione confermata, indicare la data della lezione e l'entrata/uscita. Per registrare un'assenza, selezionare **Assente**: gli orari vengono disattivati; la giustificazione e' facoltativa.
 5. In **Panoramica**, controllare iscrizioni, frequenza media, stato corsi, posti liberi e partecipanti sotto la soglia configurata.
 
+## Calendario lezioni
+
+Amministratore e tutor possono aprire **Calendario**, filtrare per corso e pianificare una lezione con titolo, data, orario e note. La data deve ricadere nel periodo del corso e l'orario finale deve essere successivo a quello iniziale. Dall'agenda del giorno e' possibile modificare o eliminare una lezione. Il docente vede gli eventi dei soli corsi a lui assegnati e non puo' modificarli.
+
 ## Ruoli
 
 - **Amministratore**: gestione utenti, corsi, partecipanti, iscrizioni e presenze.

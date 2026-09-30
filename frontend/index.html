@@ -4,9 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TrainingHub</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="users.css?v=2">
     <link rel="stylesheet" href="dashboard.css?v=1">
+    <link rel="stylesheet" href="visual-refresh.css?v=5">
 </head>
 <body>
     <main id="login-view" class="login-shell">
@@ -29,17 +33,25 @@
 
     <main id="app-view" class="app-shell hidden">
         <aside class="sidebar">
-            <div class="brand"><span>TH</span><strong>TrainingHub</strong></div>
+            <div class="sidebar-header">
+                <div class="brand"><span>TH</span><strong>TrainingHub</strong></div>
+                <div class="sidebar-actions">
+                    <button id="mobile-menu-toggle" class="mobile-menu-toggle" type="button" aria-label="Apri menu" aria-expanded="false" aria-controls="main-nav">
+                        <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
+                    </button>
+                    <button id="logout-button" class="logout-button">Esci</button>
+                </div>
+            </div>
             <p class="sidebar-label">Workspace</p>
-            <nav id="main-nav">
+            <nav id="main-nav" aria-label="Navigazione principale">
                 <button class="nav-button active" data-section="overview">Panoramica</button>
                    <button id="users-nav-button" class="nav-button" data-section="users">Utenti</button>
                 <button class="nav-button" data-section="courses">Corsi</button>
                 <button class="nav-button" data-section="participants">Partecipanti</button>
                 <button class="nav-button" data-section="enrollments">Iscrizioni</button>
+                <button class="nav-button" data-section="calendar">Calendario</button>
                 <button class="nav-button" data-section="attendance">Presenze</button>
             </nav>
-            <button id="logout-button" class="logout-button">Esci</button>
         </aside>
 
         <section class="content-area">
@@ -93,11 +105,45 @@
 
             <section id="enrollments-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">ENROLLMENT SERVICE</p><h3>Nuova iscrizione</h3></div></div><form id="enrollment-form" class="form-card form-grid"><label>Corso<select id="enrollment-course-id" required><option value="">Seleziona un corso</option></select></label><label>Partecipante<select id="enrollment-participant-id" required><option value="">Seleziona un partecipante</option></select></label><div class="form-actions"><button class="primary-button" type="submit">Crea iscrizione</button></div><p id="enrollment-error" class="form-error"></p></form><div class="section-heading compact"><h3>Iscrizioni recenti</h3></div><div id="enrollment-list" class="record-list"></div></section>
 
+            <section id="calendar-section" class="page-section hidden">
+                <div class="section-heading calendar-heading">
+                    <div><p class="eyebrow">TRAINING SCHEDULE</p><h3>Calendario lezioni</h3></div>
+                    <button id="new-lesson-toggle" class="primary-button">Nuova lezione</button>
+                </div>
+                <div class="calendar-toolbar">
+                    <div class="calendar-month-controls">
+                        <button id="calendar-prev" class="secondary-button calendar-arrow" type="button" aria-label="Mese precedente">&larr;</button>
+                        <button id="calendar-today" class="secondary-button" type="button">Oggi</button>
+                        <h4 id="calendar-month"></h4>
+                        <button id="calendar-next" class="secondary-button calendar-arrow" type="button" aria-label="Mese successivo">&rarr;</button>
+                    </div>
+                    <label class="calendar-filter">Corso<select id="calendar-course-filter"><option value="">Tutti i corsi</option></select></label>
+                </div>
+                <form id="lesson-form" class="form-card hidden form-grid">
+                    <input id="lesson-id" type="hidden">
+                    <label>Corso<select id="lesson-course-id" required><option value="">Seleziona un corso</option></select></label>
+                    <label>Titolo<input id="lesson-title" maxlength="120" required></label>
+                    <label>Data<input id="lesson-date" type="date" required></label>
+                    <label>Ora inizio<input id="lesson-start-time" type="time" required></label>
+                    <label>Ora fine<input id="lesson-end-time" type="time" required></label>
+                    <label>Note<textarea id="lesson-notes" rows="2" maxlength="500"></textarea></label>
+                    <div class="form-actions"><button id="lesson-submit" class="primary-button" type="submit">Salva lezione</button><button id="lesson-cancel" class="secondary-button" type="button">Annulla</button></div>
+                    <p id="lesson-error" class="form-error"></p>
+                </form>
+                <section class="calendar-course-period-section">
+                    <div class="section-heading compact"><h3>Corsi nel mese</h3></div>
+                    <div id="calendar-course-periods" class="calendar-course-periods"></div>
+                </section>
+                <div class="calendar-weekdays" aria-hidden="true"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
+                <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="Calendario mensile"></div>
+                <section class="calendar-agenda"><div class="section-heading compact"><h3 id="calendar-day-title">Corsi e lezioni del giorno</h3></div><div id="calendar-lesson-list" class="record-list"></div></section>
+            </section>
+
             <section id="attendance-section" class="page-section hidden"><div class="section-heading"><div><p class="eyebrow">ATTENDANCE SERVICE</p><h3 id="attendance-heading">Presenze</h3></div></div><form id="attendance-form" class="form-card form-grid"><label>Corso<select id="attendance-course-id" required><option value="">Seleziona un corso</option></select></label><label>Iscrizione<select id="attendance-enrollment-id" required><option value="">Seleziona un'iscrizione</option></select></label><label>Data lezione<input id="attendance-date" type="date" required></label><label>Entrata<input id="attendance-entry" type="time" required></label><label>Uscita<input id="attendance-exit" type="time" required></label><label class="checkbox-label"><input id="attendance-absent" type="checkbox"> Assente</label><label>Giustificazione<input id="attendance-justification"></label><div class="form-actions"><button class="primary-button" type="submit">Registra presenza</button></div><p id="attendance-error" class="form-error"></p></form><div id="attendance-list" class="record-list"></div></section>
         </section>
     </main>
     <div id="toast" class="toast" role="status"></div>
-    <script src="app.js?v=5"></script>
+    <script src="app.js?v=9"></script>
     <script src="users.js?v=5"></script>
     <script src="relations.js?v=5"></script>
 </body>

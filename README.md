@@ -114,15 +114,3 @@ I test usano H2 e non richiedono un MySQL attivo. Il frontend non ha ancora una 
 
 Ultima verifica documentata: 30 test Maven superati (Identity 7, Course 8, Participant 3, Enrollment 12). I test browser non sono automatizzati; i controlli manuali di dashboard, filtri, audit ed esportazioni non sostituiscono una suite E2E.
 
-## Documentazione di consegna
-
-- `docs/architecture.md`: servizi, comunicazioni e decisioni architetturali.
-- `docs/data-model.md`: modello dati e vincoli.
-- `docs/project-analysis.md` e `docs/backlog.md`: analisi e storie di lavoro.
-- `docs/project-diary.md`: modello da compilare con le attivita' reali del gruppo.
-- `docs/user-manual.md`: guida operativa e verifica della demo.
-- `docs/requirements-checklist.md`: mappatura dei requisiti al codice e ai test.
-- `docs/ai-usage.md`: registro dell'assistenza AI da rivedere e approvare dal gruppo.
-- `docs/presentation.md`: scaletta per la presentazione tecnica.
-
-Diagrammi e documenti sono sorgenti Markdown: il gruppo deve verificare che rappresentino la release finale, aggiungere i nomi dei corsisti e provare la procedura da un ambiente pulito prima della consegna.
